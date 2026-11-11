@@ -827,6 +827,7 @@ function viewGoal(){
     <div class="list">${ids.map(id=>{const a=ROOT.accounts[id], cur=id===ROOT.active, pr=a.state.profile;
       return `<button class="row" data-act="accswitch" data-id="${id}"><span class="w"><span class="n">${cur?"● ":""}${esc(a.name)}</span><span class="h">${GOALS[pr.goal]||""} · ${esc(pr.weight)} кг · ${a.state.dishes.length} блюд</span></span><span class="r">${cur?"активен":"открыть"}</span></button>`}).join("")}</div>
     <div class="grid2"><button class="btn block" data-act="accnew">+ Новый аккаунт</button><button class="btn block" data-act="accrename">Переименовать</button></div>
+    <button class="btn danger block" data-act="accdel">Удалить аккаунт «${esc(ROOT.accounts[ROOT.active].name)}»</button>
     <div id="accBox"></div>
     <div class="note">У каждого аккаунта свои данные, цель, продукты, блюда и рацион. Удобно, если приложением пользуется ещё кто-то или если хотите отдельный план, например для набора.</div>
   </section>
@@ -2006,10 +2007,22 @@ document.addEventListener("click",e=>{
   if(a==="accnew"){document.getElementById("accBox").innerHTML=`<div class="field"><label for="accName">Имя нового аккаунта</label><input id="accName" placeholder="например, Набор весной"></div><div class="grid2"><button class="btn primary block" data-act="accnewok" data-copy="0">Начать с шаблона</button><button class="btn block" data-act="accnewok" data-copy="1">Копия текущего</button></div>`; return}
   if(a==="accnewok"){const n=(document.getElementById("accName").value||"").trim()||"Новый аккаунт"; const id="a"+Date.now().toString(36);
     ROOT.accounts[id]={name:n,state:b.dataset.copy==="1"?fix(clone(S)):fix(clone(DEFAULT))}; ROOT.active=id; S=ROOT.accounts[id].state; selDay=todayIdx; editDish=null; commit(); window.scrollTo(0,0); return}
-  if(a==="accrename"){const ids=Object.keys(ROOT.accounts); document.getElementById("accBox").innerHTML=`<div class="field"><label for="accRen">Новое имя</label><input id="accRen" value="${esc(ROOT.accounts[ROOT.active].name)}"></div><button class="btn primary block" data-act="accrenok">Сохранить имя</button>${ids.length>1?`<button class="btn danger block" data-act="accdel">Удалить этот аккаунт</button>`:""}`; return}
+  if(a==="accrename"){const ids=Object.keys(ROOT.accounts); document.getElementById("accBox").innerHTML=`<div class="field"><label for="accRen">Новое имя</label><input id="accRen" value="${esc(ROOT.accounts[ROOT.active].name)}"></div><button class="btn primary block" data-act="accrenok">Сохранить имя</button>`; return}
   if(a==="accrenok"){const n=document.getElementById("accRen").value.trim(); if(n){ROOT.accounts[ROOT.active].name=n; commit()} return}
-  if(a==="accdel"){document.getElementById("accBox").insertAdjacentHTML("beforeend",`<div class="hint warn">Удалить «${esc(ROOT.accounts[ROOT.active].name)}» со всеми продуктами, блюдами и рационом? Это не отменить.</div><button class="btn danger block" data-act="accdelok">Да, удалить</button>`); return}
-  if(a==="accdelok"){delete ROOT.accounts[ROOT.active]; ROOT.active=Object.keys(ROOT.accounts)[0]; S=ROOT.accounts[ROOT.active].state; selDay=todayIdx; editDish=null; commit(); return}
+  if(a==="accdel"){const one=Object.keys(ROOT.accounts).length===1, nm=esc(ROOT.accounts[ROOT.active].name);
+    document.getElementById("accBox").innerHTML=`<div class="hint warn">Удалить аккаунт «${nm}»? Пропадут его данные, продукты, блюда, рационы, тренировки и фотоотчёты. Это не отменить.${one?" Это ваш единственный аккаунт, поэтому вместо него сразу будет создан новый, чистый.":""}</div>
+      <div class="note">Если данные могут пригодиться, сначала сделайте резервную копию ниже: «Скачать файл».</div>
+      <div class="field"><label for="accDelName">Для подтверждения впишите имя аккаунта: ${nm}</label><input id="accDelName" autocomplete="off"></div>
+      <div class="grid2"><button class="btn danger block" data-act="accdelok">Удалить</button><button class="btn block" data-act="accdelno">Отмена</button></div><div id="accDelMsg" class="note" style="color:var(--bad)"></div>`;
+    document.getElementById("accBox").scrollIntoView({block:"center"}); return}
+  if(a==="accdelno"){document.getElementById("accBox").innerHTML=""; return}
+  if(a==="accdelok"){const acc=ROOT.accounts[ROOT.active], typed=(document.getElementById("accDelName").value||"").trim().toLowerCase();
+    if(typed!==acc.name.trim().toLowerCase()){document.getElementById("accDelMsg").textContent="Имя не совпадает. Впишите его точно, как в списке."; return}
+    try{const ph=[]; ((acc.state.body||{}).entries||[]).forEach(e=>Object.values(e.photos||{}).forEach(id=>ph.push(id))); ph.forEach(id=>PDB.del(id))}catch(x){}
+    if(TR().active) TR().active=null;
+    delete ROOT.accounts[ROOT.active];
+    if(!Object.keys(ROOT.accounts).length){const id="a"+Date.now().toString(36); ROOT.accounts[id]={name:"Новый аккаунт",state:fix(clone(DEFAULT))}}
+    ROOT.active=Object.keys(ROOT.accounts)[0]; S=ROOT.accounts[ROOT.active].state; selDay=todayIdx; editDish=null; editDay=null; commit(); window.scrollTo(0,0); return}
   if(a==="pview"){prodView=b.dataset.v; render(); return}
   if(a==="recgoal"){recGoal=b.dataset.v; render(); return}
   if(a==="addcat"){const c=CATALOG.find(x=>x.id===b.dataset.id); if(c&&!haveCat(c)){const p={id:P(c.id)?"p"+Date.now().toString(36):c.id,catId:c.id,name:c.name,kcal:c.kcal,p:c.p,f:c.f,c:c.c}; if(c.pieceG){p.pieceG=c.pieceG;p.pieceName=c.pieceName} S.products.push(p); commit()} return}
