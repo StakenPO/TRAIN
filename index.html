@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0c0e11" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0a0c0f" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
@@ -464,6 +464,59 @@ body.tips .shop-sum{display:block}
 .legend span{display:flex;align-items:center;gap:6px}
 .lg-line{display:inline-block;width:16px;height:3px;border-radius:2px;background:var(--accent)}
 .lg-dot{display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--muted)}
+
+/* ================= Дизайн v3: акцентный итог дня ================= */
+:root{--slab:#121519;--slab-ink:#f4f6f8;--slab-muted:rgba(244,246,248,.6);--slab-track:rgba(255,255,255,.12);--ring:#34d3c2}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--slab:#1b2027;--bg:#0a0c0f;--surface:#15191e;--raise:#1e232a}}
+:root[data-theme="dark"]{--slab:#1b2027;--bg:#0a0c0f;--surface:#15191e;--raise:#1e232a}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .card,:root:not([data-theme="light"]) .meal,:root:not([data-theme="light"]) .entry,:root:not([data-theme="light"]) .opt{border:0}}
+:root[data-theme="dark"] .card,:root[data-theme="dark"] .meal,:root[data-theme="dark"] .entry,:root[data-theme="dark"] .opt{border:0}
+
+.dayhero{background:var(--slab);color:var(--slab-ink);border-radius:26px;padding:18px 18px 16px;display:flex;flex-direction:column;gap:16px;box-shadow:0 8px 24px rgba(17,20,24,.14)}
+.dh-top{display:flex;align-items:center;gap:18px}
+.ring{position:relative;width:118px;height:118px;flex:none}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.rg-bg{fill:none;stroke:var(--slab-track);stroke-width:11}
+.rg-fg{fill:none;stroke:var(--ring);stroke-width:11;stroke-linecap:round;transition:stroke-dashoffset .5s ease}
+.ring-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.ring-c .num{font-size:28px;font-weight:800;letter-spacing:-.03em}
+.ring-c small{font-size:11px;color:var(--slab-muted);margin-top:5px;font-weight:600}
+.dh-r{display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0}
+.dh-lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--slab-muted);font-weight:700}
+.dh-k{display:flex;flex-direction:column;line-height:1.05}
+.dh-k .num{font-size:30px;font-weight:800;letter-spacing:-.03em}
+.dh-k small{font-size:12.5px;color:var(--slab-muted);font-weight:600;margin-top:3px}
+.dayhero .pill.ok{background:rgba(52,211,194,.16);color:#5ee6d6}
+.dayhero .pill.warn{background:rgba(240,190,90,.16);color:#f3c66b}
+.dayhero .pill.bad{background:rgba(240,120,110,.18);color:#ff978c}
+.dh-m{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.dm{display:flex;flex-direction:column;gap:5px;min-width:0}
+.dm-l{font-size:11px;color:var(--slab-muted);font-weight:700;letter-spacing:.03em}
+.dm-v{font-size:17px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.dm-v small{font-size:11px;color:var(--slab-muted);font-weight:600}
+.dm-b{height:4px;border-radius:99px;background:var(--slab-track);overflow:hidden}
+.dm-b i{display:block;height:100%;border-radius:99px;background:#f2a65a}
+.dm-b.f i{background:#f3cf6b}.dm-b.c i{background:#9aa6b8}
+.dh-notes{display:flex;flex-direction:column;gap:10px}
+.dh-notes:empty{display:none}
+
+.card.slab{background:var(--slab);color:var(--slab-ink);box-shadow:0 8px 24px rgba(17,20,24,.14)}
+.card.slab .of,.card.slab .note{color:var(--slab-muted)}
+.card.slab .bar{background:var(--slab-track)}.card.slab .bar>i{background:var(--ring)}
+.card.slab .pill.neutral{background:var(--slab-track);color:var(--slab-ink)}
+.card.slab .pill.ok{background:rgba(52,211,194,.16);color:#5ee6d6}
+
+/* Неделя: таблетки */
+.week{background:var(--surface);border-radius:20px;padding:6px;box-shadow:var(--card-shadow)}
+.dayb{border-radius:14px;padding:7px 0}
+.dayb[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.dayb.today:not([aria-pressed="true"]) .wd{color:var(--accent)}
+
+/* Приём пищи: акцент на калориях */
+.mk .num{font-size:20px}
+.meal .mname{font-size:19px;font-weight:800}
+.hero{background:var(--slab);color:var(--slab-ink)}
+.hero-k .lbl{color:var(--slab-muted);opacity:1}
 </style>
 <style>
 html,body{margin:0}
@@ -742,13 +795,19 @@ function viewDay(){
   const fmt=now.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
   let h=`<header class="toprow"><div><div class="eyebrow">${isToday?"Сегодня · "+fmt:"Другой день недели"}</div><h1>${WDF[d][0].toUpperCase()+WDF[d].slice(1)}</h1><div class="sub keep">День ${d+1} из 7 · план «${GOALS[S.planGoal]||""}»${cycleDelta(d)?(cycleDelta(d)>0?" · тренировка ↑":" · отдых ↓"):""}</div></div>${syncHtml()}</header>`;
 
-  h+=`<section class="card" aria-label="Итог дня">
-    <div class="kpi"><div><span class="num big">${r(tot[0])}</span> <span class="of">из ${r(T.kcal)} ккал по плану</span></div><span class="pill ${st}">${stTxt}</span></div>
-    ${macroRow("Белок",tot[1],T.p,"p","г")}${macroRow("Жиры",tot[2],T.f,"f","г")}${macroRow("Углев.",tot[3],T.c,"c","г")}
+  const ringV=isToday?eatenT[0]:tot[0], ringPct=Math.max(0,Math.min(1,ringV/T.kcal)), RC=2*Math.PI*52;
+  const mt=(l,v,t,cls)=>`<div class="dm"><span class="dm-l">${l}</span><span class="dm-v num">${r(v)}<small> / ${r(t)} г</small></span><span class="dm-b ${cls}"><i style="width:${Math.min(100,t>0?v/t*100:0)}%"></i></span></div>`;
+  h+=`<section class="dayhero" aria-label="Итог дня">
+    <div class="dh-top">
+      <div class="ring" role="img" aria-label="${isToday?"Съедено":"В плане"} ${r(ringV)} из ${r(T.kcal)} ккал"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="rg-bg"/><circle cx="60" cy="60" r="52" class="rg-fg" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-ringPct)).toFixed(1)}"/></svg>
+        <div class="ring-c"><span class="num">${r(ringV)}</span><small>${isToday?"съедено":"в плане"}</small></div></div>
+      <div class="dh-r"><span class="dh-lbl">План дня</span><div class="dh-k"><span class="num">${r(tot[0])}</span><small>из ${r(T.kcal)} ккал</small></div><span class="pill ${st}">${stTxt}</span></div>
+    </div>
+    <div class="dh-m">${mt("Белок",tot[1],T.p,"p")}${mt("Жиры",tot[2],T.f,"f")}${mt("Углеводы",tot[3],T.c,"c")}</div>
+  </section><section class="dh-notes">
     ${pLow?`<div class="hint warn">Белка меньше цели на ${r(T.p-tot[1])} г. Добавьте творог, тунец или курицу.</div>`:""}
     ${fHigh?`<div class="hint warn">Жиров больше нормы на ${r(tot[2]-T.f)} г. Уменьшите масло или жирные продукты.</div>`:""}
     ${dayIssues(d).length?`<button class="btn primary block" data-act="balbtn">⚖ Подогнать день автоматически</button>`:""}
-    ${isToday?`<div class="mrow"><span class="lbl">Съедено</span><div class="bar"><i style="width:${Math.min(100,eatenT[0]/T.kcal*100)}%"></i></div><span class="val"><span class="num">${r(eatenT[0])}</span> ккал</span></div>`:""}
   </section>`;
 
   h+=`<div class="grid2" style="grid-template-columns:${S.dishes.length?"1fr 1fr":"1fr"}"><button class="btn primary block" data-act="dayadd">+ Продукт в день</button>${S.dishes.length?`<button class="btn primary block" data-act="mydish">+ Моё блюдо</button>`:""}</div>${isStd(d)?"":`<button class="btn block" data-act="restore">↺ Вернуть стандартный день</button>`}`;
@@ -1521,7 +1580,7 @@ function viewWorkout(){
 function viewActive(a){
   const total=a.ex.reduce((x,e)=>x+e.sets.length,0), done=sessSets(a);
   let h=`<header class="toprow"><div><div class="eyebrow">Идёт тренировка</div><h1>${esc(a.name)}</h1><div class="sub">${esc(a.focus||"")}</div></div></header>
-  <section class="card"><div class="kpi"><div><span class="num big" id="sessClock">${fmtDur(Date.now()-a.start)}</span> <span class="of">время</span></div><span class="pill ${done>=total?"ok":"neutral"}">${done} / ${total} подходов</span></div>
+  <section class="card slab"><div class="kpi"><div><span class="num big" id="sessClock">${fmtDur(Date.now()-a.start)}</span> <span class="of">время</span></div><span class="pill ${done>=total?"ok":"neutral"}">${done} / ${total} подходов</span></div>
   <div class="bar"><i style="width:${total?done/total*100:0}%"></i></div>
   <div class="note tip">Нажмите ✓ после подхода: таймер отдыха включится сам. Пустые поля заполнятся подсказкой (серые цифры).</div></section>`;
   a.ex.forEach((e,ei)=>{

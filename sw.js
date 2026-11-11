@@ -1,6 +1,6 @@
 // Работа без интернета. Страница берётся из сети, если она есть (так обновления видны сразу),
 // иначе из сохранённой копии. При обновлении файлов поменяйте номер версии.
-const CACHE="racion-v11";
+const CACHE="racion-v12";
 const SHELL=["./","./index.html","./manifest.webmanifest","./icon-192.png","./icon-512.png","./apple-touch-icon.png","./html5-qrcode.min.js"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL.map(u=>new Request(u,{cache:"reload"}))))); self.skipWaiting()});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim()});
