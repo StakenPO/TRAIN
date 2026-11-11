@@ -237,6 +237,9 @@ h2{margin:0;font-size:18px;font-weight:800}
 .wrow{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:center;padding:4px 0}
 .wrow b{font-weight:800}
 .chart{width:100%;height:auto;display:block}
+
+/* Не приближать экран при двойном нажатии (щипок для увеличения остаётся) */
+html,body,*{touch-action:manipulation}
 </style>
 <style>
 html,body{margin:0}
@@ -1538,7 +1541,7 @@ connect();
 </script>
 
 <script>
-if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})})}
+if("serviceWorker" in navigator){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>r.update()).catch(()=>{})})}
 </script>
 </body>
 </html>
