@@ -517,11 +517,39 @@ body.tips .shop-sum{display:block}
 .meal .mname{font-size:19px;font-weight:800}
 .hero{background:var(--slab);color:var(--slab-ink)}
 .hero-k .lbl{color:var(--slab-muted);opacity:1}
+
+/* ================= Экран «Сегодня» ================= */
+body.notabs .wrap{padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+body.notabs .restbar{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.modesw button{padding:6px 11px}
+.rg-fg.over{stroke:#ff8f84}
+.qa{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.qa-b{appearance:none;border:0;background:var(--surface);box-shadow:var(--card-shadow);border-radius:18px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink);cursor:pointer;transition:transform .12s ease}
+.qa-b:active{transform:scale(.96)}
+.qa-i{width:34px;height:34px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800}
+.nextm{gap:12px}
+.nm-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.nm-t{font-size:20px;font-weight:800;letter-spacing:-.02em;margin-top:2px}
+.nextm .sub{display:block}
+.nm-items{display:flex;flex-direction:column}
+.nm-i{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14.5px}
+.nm-i:first-child{border-top:0}
+.nm-i small{color:var(--muted);font-size:12px}
+.nm-f{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nextm.done{align-items:flex-start}
+.frow{align-items:center;cursor:default}
+.frow .x{margin-left:6px;flex:none}
+.tagx{font-size:10.5px;font-weight:700;color:var(--warn);background:var(--warn-soft);padding:1px 6px;border-radius:6px;vertical-align:1px}
+.tcard{gap:10px}
+.remind{appearance:none;border:0;display:flex;flex-direction:row;width:100%;justify-content:space-between;align-items:center;text-align:left;cursor:pointer;font:inherit;color:var(--ink);background:var(--accent-soft)}
+.remind > span:last-child{font-size:22px;color:var(--accent)}
 </style>
 <style>
 html,body{margin:0}
 html{-webkit-text-size-adjust:100%;color-scheme:light}
 @media (prefers-color-scheme: dark){html{color-scheme:dark}}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
 body{font-size:15px;padding-top:env(safe-area-inset-top,0px);min-height:100vh}
 [hidden]{display:none!important}
 img{max-width:100%}
@@ -583,8 +611,8 @@ const now=new Date();
 const todayIdx=(now.getDay()+6)%7;
 const dateKey=now.getFullYear()+"-"+(now.getMonth()+1)+"-"+now.getDate();
 
-let mode=(()=>{try{return localStorage.getItem("ration_mode")||"food"}catch(e){return "food"}})();
-let S=null, tab=mode==="train"?"workout":mode==="body"?"photos":"day", selDay=todayIdx, ctx={}, prodView="mine", recGoal=null;
+let mode="today"; // приложение всегда открывается на экране «Сегодня»
+let S=null, tab="today", selDay=todayIdx, ctx={}, prodView="mine", recGoal=null;
 
 /* ---------- Рекомендуемые продукты (КБЖУ на 100 г, средние цифры) ---------- */
 const GOALS={cut:"Сушка",maintain:"Поддержание",bulk:"Набор"};
@@ -681,6 +709,7 @@ function fix(s){ // защитить от неполных или старых �
   if(!s.body||!Array.isArray(s.body.entries)) s.body={entries:[]};
   if(!s.pantry||typeof s.pantry!=="object") s.pantry={};
   if(!s.plans||typeof s.plans!=="object") s.plans={};
+  if(!s.extras||typeof s.extras!=="object") s.extras={};
   if(!Array.isArray(s.weights)){s.weights=[]; ((s.body||{}).entries||[]).forEach(e=>{if(num(e.weight)&&!s.weights.find(x=>x.date===e.date)) s.weights.push({date:e.date,w:num(e.weight)})})}
   if(!s.planGoal) s.planGoal=s.profile.goal||"cut";
   if(!Array.isArray(s.baseSchedule)||s.baseSchedule.length!==7) s.baseSchedule=clone(d.schedule);
@@ -775,7 +804,7 @@ function render(){
   renderTabs();
   const v=document.getElementById("view");
   const body = tab==="day"?viewDay():tab==="dishes"?viewDishes():tab==="products"?viewProducts():tab==="shop"?viewShop()
-    :tab==="workout"?viewWorkout():tab==="program"?viewProgram():tab==="history"?viewHistory():tab==="photos"?viewPhotos():tab==="weight"?viewWeight():tab==="compare"?viewCompare():viewGoal();
+    :tab==="workout"?viewWorkout():tab==="program"?viewProgram():tab==="history"?viewHistory():tab==="today"?viewToday():tab==="photos"?viewPhotos():tab==="weight"?viewWeight():tab==="compare"?viewCompare():viewGoal();
   v.innerHTML = modeSwitch()+body;
   renderRest();
   hydratePhotos(v);
@@ -789,7 +818,7 @@ function macroRow(lbl,val,tgt,cls,unit){
 function viewDay(){
   const d=selDay, T=dayTarget(d), tot=dayTotal(d), isToday=d===todayIdx;
   if(S.eaten.date!==dateKey){S.eaten={date:dateKey,done:[]}}
-  const eatenT = isToday ? S.slots.filter(s=>S.eaten.done.includes(s.key)).reduce((a,s)=>add(a,sumItems(variantOf(s,d).items)),Z()) : null;
+  const eatenT = isToday ? factToday() : null;
   const [st,stTxt]=kcalState(tot[0],T.kcal);
   const pLow=tot[1]<T.p*0.9, fHigh=tot[2]>T.fLimit;
   const fmt=now.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
@@ -805,6 +834,7 @@ function viewDay(){
     </div>
     <div class="dh-m">${mt("Белок",tot[1],T.p,"p")}${mt("Жиры",tot[2],T.f,"f")}${mt("Углеводы",tot[3],T.c,"c")}</div>
   </section><section class="dh-notes">
+    ${isToday?`<button class="btn block" data-act="x_open">+ Съел вне плана${extrasToday().length?" · уже "+r(extrasToday().reduce((a,x)=>a+num(x.kcal),0))+" ккал":""}</button>`:""}
     ${pLow?`<div class="hint warn">Белка меньше цели на ${r(T.p-tot[1])} г. Добавьте творог, тунец или курицу.</div>`:""}
     ${fHigh?`<div class="hint warn">Жиров больше нормы на ${r(tot[2]-T.f)} г. Уменьшите масло или жирные продукты.</div>`:""}
     ${dayIssues(d).length?`<button class="btn primary block" data-act="balbtn">⚖ Подогнать день автоматически</button>`:""}
@@ -1082,6 +1112,8 @@ function viewGoal(){
   </section>
 
   <section class="card" id="goalRes">${goalRes()}</section>
+  <section class="card"><div class="kpi"><div><h2>Тема</h2></div>
+    <div class="seg" style="min-width:230px">${[["auto","Как в системе"],["light","Светлая"],["dark","Тёмная"]].map(([v,l])=>`<button data-act="theme" data-v="${v}" aria-pressed="${themePref===v}">${l}</button>`).join("")}</div></div></section>
   <section class="card"><div class="kpi"><div><h2>Подсказки</h2><div class="note" style="margin-top:2px">Пояснения под кнопками и разделами</div></div>
     <div class="seg" style="min-width:150px"><button data-act="tips" data-v="0" aria-pressed="${!tipsOn}">Скрыть</button><button data-act="tips" data-v="1" aria-pressed="${tipsOn}">Показать</button></div></div></section>
   ${backupCard()}
@@ -1515,16 +1547,17 @@ const ICON={
   photos:'<rect x="3" y="6" width="18" height="14" rx="3"/><path d="M8 6l1.5-2h5L16 6"/><circle cx="12" cy="13" r="3.5"/>',
   compare:'<rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/>'
 };
-const TABS={body:[["photos","Фото"],["weight","Вес"],["compare","Сравнение"],["goal","Аккаунт"]],food:[["day","Рацион"],["dishes","Блюда"],["products","Продукты"],["shop","Покупки"],["goal","Аккаунт"]],
+const TABS={today:[],body:[["photos","Фото"],["weight","Вес"],["compare","Сравнение"],["goal","Аккаунт"]],food:[["day","Рацион"],["dishes","Блюда"],["products","Продукты"],["shop","Покупки"],["goal","Аккаунт"]],
   train:[["workout","Тренировка"],["program","Программа"],["history","Прогресс"],["goal","Аккаунт"]]};
 function renderTabs(){
-  const el=document.getElementById("tabsIn"); if(!el) return; const list=TABS[mode];
+  const el=document.getElementById("tabsIn"); if(!el) return; const list=TABS[mode]||[];
+  el.closest(".tabs").hidden=!list.length; document.body.classList.toggle("notabs",!list.length);
   el.style.gridTemplateColumns=`repeat(${list.length},1fr)`;
   el.innerHTML=list.map(([k,l])=>`<button class="tab" data-act="tab" data-tab="${k}" aria-current="${k===tab?"page":"false"}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${l}</button>`).join("");
 }
 function modeSwitch(){
   const a=TR().active;
-  return `<div class="modesw" role="tablist" aria-label="Раздел"><button data-act="mode" data-v="food" aria-pressed="${mode==="food"}">Питание</button><button data-act="mode" data-v="train" aria-pressed="${mode==="train"}">Тренировки${a&&mode!=="train"?" •":""}</button><button data-act="mode" data-v="body" aria-pressed="${mode==="body"}">Форма</button></div>`;
+  return `<div class="modesw" role="tablist" aria-label="Раздел"><button data-act="mode" data-v="today" aria-pressed="${mode==="today"}">Сегодня</button><button data-act="mode" data-v="food" aria-pressed="${mode==="food"}">Питание</button><button data-act="mode" data-v="train" aria-pressed="${mode==="train"}">Тренировки${a&&mode!=="train"?" •":""}</button><button data-act="mode" data-v="body" aria-pressed="${mode==="body"}">Форма</button></div>`;
 }
 
 /* ---------- Таймер отдыха ---------- */
@@ -1700,7 +1733,7 @@ function finishSummary(s,prs){
 document.addEventListener("click",e=>{
   unlockAudio();
   const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act;
-  if(a==="mode"){mode=b.dataset.v; try{localStorage.setItem("ration_mode",mode)}catch(x){} tab=mode==="train"?"workout":mode==="body"?"photos":"day"; editDay=null; render(); window.scrollTo(0,0); return}
+  if(a==="mode"){mode=b.dataset.v; try{localStorage.setItem("ration_mode",mode)}catch(x){} tab=mode==="train"?"workout":mode==="body"?"photos":mode==="today"?"today":"day"; editDay=null; render(); window.scrollTo(0,0); return}
   if(!a.startsWith("t_")) return;
   const T=TR(), A=T.active;
   if(a==="t_start"){if(A){openSheet("Уже идёт тренировка",`<div class="note">Сейчас идёт «${esc(A.name)}». Сначала завершите или отмените её.</div><button class="btn primary block" data-act="t_goactive">Открыть текущую</button>`); return} startSession(b.dataset.id); return}
@@ -2252,6 +2285,127 @@ document.addEventListener("click",e=>{
   if(a==="w_quick"){const w=num(document.getElementById("fsW").value); if(addWeight(isoToday(),w)){commit(false); document.getElementById("fsWBox").innerHTML=`<div class="hint">Вес ${fmtW(w)} кг записан в дневник.</div>`} return}
 });
 
+/* ==================== ФАКТ: ЧТО СЪЕЛИ НА САМОМ ДЕЛЕ ==================== */
+function ensureToday(){ if(!S.eaten||S.eaten.date!==dateKey) S.eaten={date:dateKey,done:[]}; if(!S.extras||typeof S.extras!=="object") S.extras={} }
+function extrasToday(){ ensureToday(); return S.extras[dateKey]||[] }
+const exMac=x=>[num(x.kcal),num(x.p),num(x.f),num(x.c)];
+function factToday(){
+  ensureToday();
+  const plan=S.slots.filter(s=>S.eaten.done.includes(s.key)).reduce((a,s)=>add(a,sumItems(variantOf(s,todayIdx).items)),Z());
+  return extrasToday().reduce((a,x)=>add(a,exMac(x)),plan);
+}
+function recentExtras(){
+  const seen=new Set(), out=[];
+  Object.keys(S.extras||{}).sort().reverse().forEach(k=>(S.extras[k]||[]).slice().reverse().forEach(x=>{const key=x.name+"|"+x.g; if(!seen.has(key)&&out.length<6){seen.add(key); out.push(x)}}));
+  return out;
+}
+function addExtra(x){ ensureToday(); (S.extras[dateKey]=S.extras[dateKey]||[]).push(Object.assign({id:uid("x"),t:Date.now()},x));
+  const keys=Object.keys(S.extras).sort(); while(keys.length>45) delete S.extras[keys.shift()] }
+
+function sheetExtra(){
+  ctx={mode:"extra"}; const rec=recentExtras();
+  openSheet("Съел вне плана",`
+    ${rec.length?`<span class="flabel">Недавнее</span><div class="vchips" style="padding:0">${rec.map((x,i)=>`<button class="vchip" data-act="x_recent" data-i="${i}">${esc(x.name)}${x.g?" "+r(x.g)+" г":""} · ${r(x.kcal)}</button>`).join("")}</div>`:""}
+    <div class="seg"><button data-act="x_tab" data-v="prod" aria-pressed="true">Из продуктов</button><button data-act="x_tab" data-v="man" aria-pressed="false">Вручную</button></div>
+    <div id="xBody"><div class="field"><input id="pSearch" type="search" placeholder="Поиск продукта" aria-label="Поиск продукта"></div><div class="list" id="pList">${pickRows("",null)}</div>
+    <button class="btn block" data-act="newprod">+ Новый продукт</button></div>`);
+  ctx.recent=rec;
+}
+function extraManualHtml(){
+  return `<div class="field"><label for="xName">Что съели</label><input id="xName" placeholder="например, кусок пиццы"></div>
+    <div class="grid4"><div class="field"><label for="xK">Ккал</label><input id="xK" type="number" inputmode="decimal"></div><div class="field"><label for="xP">Белки</label><input id="xP" type="number" inputmode="decimal"></div>
+    <div class="field"><label for="xF">Жиры</label><input id="xF" type="number" inputmode="decimal"></div><div class="field"><label for="xC">Углев.</label><input id="xC" type="number" inputmode="decimal"></div></div>
+    <div class="note">Белки, жиры и углеводы можно не заполнять, достаточно калорий.</div><div id="xMsg" class="note" style="color:var(--bad)"></div>
+    <button class="btn primary block" data-act="x_addm">Добавить</button>`;
+}
+function sheetExtraAmount(){
+  const p=P(ctx.pid); if(!p) return; const g=ctx.g||(p.pieceG&&p.pieceG>=30?p.pieceG:100);
+  openSheet(esc(p.name),`
+    <div class="stepper"><button class="btn" data-act="x_step" data-d="-10" aria-label="Минус 10 грамм">−10</button><div class="field"><input id="xG" type="number" inputmode="decimal" value="${r(g)}" aria-label="Граммы"></div><button class="btn" data-act="x_step" data-d="10" aria-label="Плюс 10 грамм">+10</button></div>
+    <div class="chips" id="xMac">${macChips([p.kcal,p.p,p.f,p.c].map(v=>v*g/100))}</div>
+    <div class="note" id="xLeft"></div>
+    <button class="btn primary block" data-act="x_addp">Добавить в «съедено»</button>
+    <button class="btn ghost block" data-act="x_back">← Другой продукт</button>`);
+  xLive();
+}
+function xLive(){const p=P(ctx.pid), el=document.getElementById("xG"); if(!p||!el) return; const g=num(el.value), m=[p.kcal,p.p,p.f,p.c].map(v=>v*g/100);
+  document.getElementById("xMac").innerHTML=macChips(m);
+  const T=dayTarget(todayIdx), left=T.kcal-factToday()[0]-m[0]; document.getElementById("xLeft").innerHTML=left>=0?`После этого на сегодня останется <b class="num">${r(left)}</b> ккал.`:`Это <b class="num">+${r(-left)}</b> ккал сверх цели дня.`}
+
+/* ==================== ЭКРАН «СЕГОДНЯ» ==================== */
+function viewToday(){
+  selDay=todayIdx; ensureToday();
+  const d=todayIdx, T=dayTarget(d), plan=dayTotal(d), fact=factToday(), left=T.kcal-fact[0], ex=extrasToday();
+  const hr=new Date().getHours(), greet=hr<5?"Доброй ночи":hr<12?"Доброе утро":hr<18?"Добрый день":"Добрый вечер";
+  const dstr=now.toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"});
+  const RC=2*Math.PI*52, pct=Math.max(0,Math.min(1,fact[0]/T.kcal));
+  const mt=(l,v,t,cls)=>`<div class="dm"><span class="dm-l">${l}</span><span class="dm-v num">${r(v)}<small> / ${r(t)} г</small></span><span class="dm-b ${cls}"><i style="width:${Math.min(100,t>0?v/t*100:0)}%"></i></span></div>`;
+  const over=left<-T.kcal*0.03, cyc=cycleDelta(d);
+  let h=`<header class="toprow"><div><div class="eyebrow">${dstr}</div><h1>${greet}</h1></div>${syncHtml()}</header>`;
+  h+=`<section class="dayhero" aria-label="Сегодня">
+    <div class="dh-top">
+      <div class="ring" role="img" aria-label="Съедено ${r(fact[0])} из ${r(T.kcal)} ккал"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="rg-bg"/><circle cx="60" cy="60" r="52" class="rg-fg${over?" over":""}" stroke-dasharray="${RC.toFixed(1)}" stroke-dashoffset="${(RC*(1-pct)).toFixed(1)}"/></svg>
+        <div class="ring-c"><span class="num">${r(fact[0])}</span><small>съедено</small></div></div>
+      <div class="dh-r"><span class="dh-lbl">${over?"Сверх цели":"Осталось"}</span><div class="dh-k"><span class="num">${r(Math.abs(left))}</span><small>из ${r(T.kcal)} ккал${cyc?(cyc>0?" · трен.":" · отдых"):""}</small></div>
+        ${ex.length?`<span class="pill ${over?"bad":"warn"}">вне плана ${r(ex.reduce((a,x)=>a+num(x.kcal),0))} ккал</span>`:`<span class="pill ok">по плану</span>`}</div>
+    </div>
+    <div class="dh-m">${mt("Белок",fact[1],T.p,"p")}${mt("Жиры",fact[2],T.f,"f")}${mt("Углеводы",fact[3],T.c,"c")}</div>
+  </section>`;
+  h+=`<div class="qa"><button class="qa-b" data-act="x_open"><span class="qa-i">+</span>Вне плана</button><button class="qa-b" data-act="td_go" data-m="food" data-t="day"><span class="qa-i">☰</span>Рацион</button><button class="qa-b" data-act="td_go" data-m="body" data-t="weight"><span class="qa-i">⚖</span>Вес</button></div>`;
+
+  const next=S.slots.find(s=>!S.eaten.done.includes(s.key));
+  if(next){const si=S.slots.indexOf(next), v=variantOf(next,d), m=sumItems(v.items);
+    h+=`<section class="card nextm"><div class="nm-h"><div><span class="dh-lbl" style="color:var(--muted)">Следующий приём</span><div class="nm-t">${esc(next.name)}</div><div class="sub">${esc(v.name)}</div></div><div class="mk"><span class="num">${r(m[0])}</span>ккал</div></div>
+      <div class="nm-items">${v.items.map(it=>{const p=P(it.pid); return `<div class="nm-i"><span>${p?esc(p.name.split(" (")[0]):"?"}${hintFor(it)?` <small>${hintFor(it)}</small>`:""}</span><b class="num">${r(it.g)} г</b></div>`}).join("")}</div>
+      <div class="nm-f"><button class="btn primary" data-act="eat" data-k="${next.key}">✓ Съел</button><button class="btn" data-act="choose" data-s="${si}">Другое блюдо</button></div></section>`;
+  } else h+=`<section class="card nextm done"><div class="nm-t">Все приёмы на сегодня отмечены</div><div class="sub" style="display:block">Если ели что-то ещё, добавьте через «Вне плана».</div></section>`;
+
+  const doneSlots=S.slots.filter(s=>S.eaten.done.includes(s.key));
+  if(doneSlots.length||ex.length){
+    h+=`<div class="grp">Съедено сегодня</div><section class="card" style="gap:0;padding-block:6px">${doneSlots.map(s=>{const v=variantOf(s,d), m=sumItems(v.items);
+      return `<div class="row frow"><span class="w"><span class="n">${esc(s.name)}</span><span class="h">${esc(v.name)}</span></span><span class="r num">${r(m[0])} ккал</span><button class="x" data-act="eat" data-k="${s.key}" aria-label="Отменить отметку">↺</button></div>`}).join("")}
+      ${ex.map(x=>`<div class="row frow"><span class="w"><span class="n">${esc(x.name)} <span class="tagx">вне</span></span><span class="h">${x.g?r(x.g)+" г · ":""}Б ${r(x.p)} Ж ${r(x.f)} У ${r(x.c)}</span></span><span class="r num">${r(x.kcal)} ккал</span><button class="x" data-act="x_del" data-id="${x.id}" aria-label="Удалить">✕</button></div>`).join("")}</section>`;
+  }
+
+  const Tr=TR(), a=Tr.active, sesToday=Tr.sessions.filter(s=>s.date===dateKey), planId=Tr.week[d], pd=planId?dayById(planId):null;
+  h+=`<div class="grp">Тренировка</div>`;
+  if(a){const total=a.ex.reduce((x,e)=>x+e.sets.length,0), dn=sessSets(a);
+    h+=`<section class="card slab tcard"><div class="kpi"><div><span class="dh-lbl">Идёт сейчас</span><div class="nm-t">${esc(a.name)}</div></div><span class="pill neutral">${dn} / ${total}</span></div><div class="bar"><i style="width:${total?dn/total*100:0}%"></i></div><button class="btn primary block" data-act="td_go" data-m="train" data-t="workout">Продолжить</button></section>`;
+  } else if(sesToday.length){const s=sesToday[sesToday.length-1];
+    h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${esc(s.name)} ✓</div><div class="sub" style="display:block">${fmtDur((s.end||s.start)-s.start)} · ${sessSets(s)} подходов · ${Math.round(sessVolume(s))} кг объём</div></div><span class="pill ok">сделано</span></div></section>`;
+  } else if(pd){
+    h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${esc(pd.name)}</div><div class="sub" style="display:block">${esc(pd.focus||"")} · ${pd.ex.length} упражнений</div></div></div><button class="btn primary block" data-act="t_start" data-id="${pd.id}">Начать тренировку</button></section>`;
+  } else h+=`<section class="card tcard"><div class="nm-t">День отдыха</div><div class="sub" style="display:block">Восстановление тоже часть прогресса. Хорошо бы набрать шаги.</div></section>`;
+
+  const ws=weightsAsc(), ser=trendSeries(ws), lw=ser[ser.length-1], R=weeklyRate(ser);
+  h+=`<div class="grp">Вес</div><section class="card"><div class="kpi"><div><span class="num big" style="font-size:30px">${lw?fmtW(Math.round(lw.tr*10)/10):fmtW(S.profile.weight)}</span> <span class="of">кг${lw?" · тренд":""}${R?" · "+signed(R.rate,"кг/нед",2):""}</span></div></div>
+    <div class="coderow"><div class="field"><input id="tdW" type="number" inputmode="decimal" step="0.1" placeholder="Вес сегодня, кг" aria-label="Вес сегодня"></div><button class="btn" data-act="td_w">Записать</button></div><div id="tdWMsg"></div></section>`;
+
+  const lastRep=entriesAsc().slice(-1)[0], due=!lastRep||daysBetween(lastRep.date,isoToday())>=30;
+  if(due) h+=`<button class="card remind" data-act="td_go" data-m="body" data-t="photos"><span><b>${lastRep?"Пора сделать фотоотчёт":"Сделайте первый фотоотчёт"}</b><span class="sub" style="display:block">${lastRep?"Прошло "+daysBetween(lastRep.date,isoToday())+" дн. с прошлого":"Точка старта, чтобы видеть изменения"}</span></span><span aria-hidden="true">›</span></button>`;
+  return h;
+}
+
+/* ==================== СОБЫТИЯ ==================== */
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b||!S) return; const a=b.dataset.act;
+  if(a==="x_open"){sheetExtra(); return}
+  if(a==="x_tab"){const man=b.dataset.v==="man"; document.querySelectorAll('[data-act="x_tab"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+    document.getElementById("xBody").innerHTML=man?extraManualHtml():`<div class="field"><input id="pSearch" type="search" placeholder="Поиск продукта" aria-label="Поиск продукта"></div><div class="list" id="pList">${pickRows("",null)}</div><button class="btn block" data-act="newprod">+ Новый продукт</button>`; return}
+  if(a==="x_recent"){const x=ctx.recent&&ctx.recent[+b.dataset.i]; if(x){addExtra({name:x.name,g:x.g||0,kcal:x.kcal,p:x.p,f:x.f,c:x.c,pid:x.pid||null}); closeSheet(); commit()} return}
+  if(a==="x_step"){const el=document.getElementById("xG"); el.value=Math.max(0,num(el.value)+ +b.dataset.d); xLive(); return}
+  if(a==="x_back"){sheetExtra(); return}
+  if(a==="x_addp"){const p=P(ctx.pid), g=num(document.getElementById("xG").value); if(!p||!(g>0)) return; const m=[p.kcal,p.p,p.f,p.c].map(v=>Math.round(v*g/100*10)/10);
+    addExtra({name:p.name.split(" (")[0],pid:p.id,g,kcal:m[0],p:m[1],f:m[2],c:m[3]}); closeSheet(); commit(); return}
+  if(a==="x_addm"){const n=(document.getElementById("xName").value||"").trim(), k=num(document.getElementById("xK").value);
+    if(!n||!(k>0)){document.getElementById("xMsg").textContent="Нужно название и калории."; return}
+    addExtra({name:n,g:0,kcal:k,p:num(document.getElementById("xP").value),f:num(document.getElementById("xF").value),c:num(document.getElementById("xC").value)}); closeSheet(); commit(); return}
+  if(a==="x_del"){ensureToday(); S.extras[dateKey]=(S.extras[dateKey]||[]).filter(x=>x.id!==b.dataset.id); commit(); return}
+  if(a==="td_go"){mode=b.dataset.m; tab=b.dataset.t; editDay=null; render(); window.scrollTo(0,0); return}
+  if(a==="td_w"){const w=num(document.getElementById("tdW").value); if(addWeight(isoToday(),w)) commit(); else document.getElementById("tdWMsg").innerHTML=`<div class="hint warn">Впишите вес, например 89,4.</div>`; return}
+});
+document.addEventListener("input",e=>{if(e.target.id==="xG") xLive()});
+
 /* ---------- События ---------- */
 document.addEventListener("click",async e=>{
   const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act; if(!a.startsWith("b_")) return;
@@ -2322,7 +2476,7 @@ document.addEventListener("click",e=>{
   if(a==="scope"){ctx.scope=b.dataset.v; if(ctx.sheet==="opts") sheetOptions(ctx.pid); else {const g=document.getElementById("gIn"); const keep=g?g.value:null; sheetItem(); if(keep!=null) {gIn.value=keep; liveItem()}} return}
   if(a==="swap"){sheetPicker("swap"); return}
   if(a==="add"){ctx={s:+b.dataset.s}; sheetPicker("add"); return}
-  if(a==="pick"){if(ctx.mode==="day") startDayAdd(b.dataset.id); else if(ctx.mode==="dish"){editDish.items.push({pid:b.dataset.id,g:100}); closeSheet(); render()} else sheetOptions(b.dataset.id); return}
+  if(a==="pick"){if(ctx.mode==="extra"){ctx.pid=b.dataset.id; ctx.g=0; sheetExtraAmount(); return} if(ctx.mode==="day") startDayAdd(b.dataset.id); else if(ctx.mode==="dish"){editDish.items.push({pid:b.dataset.id,g:100}); closeSheet(); render()} else sheetOptions(b.dataset.id); return}
   if(a==="dnew"){editDish={isNew:true,id:"d"+Date.now().toString(36),name:"",items:[]}; dfit={si:slotGuess(),mode:"side",d:null}; render(); window.scrollTo(0,0); return}
   if(a==="dedit"){const ds=S.dishes.find(x=>x.id===b.dataset.id); if(ds){editDish=clone(ds); dfit={si:slotGuess(),mode:"side",d:null}; render(); window.scrollTo(0,0)} return}
   if(a==="dback"){editDish=null; render(); return}
@@ -2389,6 +2543,7 @@ document.addEventListener("click",e=>{
     else {id="p"+Date.now().toString(36); S.products.push(Object.assign({id},data))}
     const back=ctx.back; commit();
     if(back&&back.mode==="day"){ctx={onlyDay:true}; startDayAdd(id)}
+    else if(back&&back.mode==="extra"){ctx={mode:"extra",pid:id}; sheetExtraAmount()}
     else if(back&&back.mode==="dish"){editDish.items.push({pid:id,g:100}); closeSheet(); render()}
     else if(back){ctx={s:back.s,i:back.i,mode:back.mode}; sheetOptions(id)} else closeSheet();
     return}
@@ -2446,6 +2601,16 @@ document.addEventListener("change",e=>{const t=e.target; if(t.id==="bkFileIn"&&t
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!document.getElementById("sheet").hidden) closeSheet()});
 
 /* ---------- Старт ---------- */
+let themePref=(()=>{try{return localStorage.getItem("ration_theme")||"auto"}catch(e){return "auto"}})();
+function applyTheme(){
+  const el=document.documentElement;
+  if(themePref==="auto") delete el.dataset.theme; else el.dataset.theme=themePref;
+  const dark=themePref==="dark"||(themePref==="auto"&&window.matchMedia&&matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m=>{m.setAttribute("content",dark?"#0a0c0f":"#f3f4f6"); m.removeAttribute("media")});
+}
+if(STANDALONE||themePref!=="auto") applyTheme();
+try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{if(themePref==="auto") applyTheme()})}catch(e){}
+document.addEventListener("click",e=>{const b=e.target.closest('[data-act="theme"]'); if(!b) return; themePref=b.dataset.v; try{localStorage.setItem("ration_theme",themePref)}catch(x){} applyTheme(); render()});
 let tipsOn=(()=>{try{return localStorage.getItem("ration_tips")==="1"}catch(e){return false}})();
 document.body.classList.toggle("tips",tipsOn);
 document.addEventListener("click",e=>{const b=e.target.closest('[data-act="tips"]'); if(!b) return; tipsOn=b.dataset.v==="1"; try{localStorage.setItem("ration_tips",tipsOn?"1":"0")}catch(x){} document.body.classList.toggle("tips",tipsOn); render()});
