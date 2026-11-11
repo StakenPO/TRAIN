@@ -543,6 +543,18 @@ body.notabs .restbar{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 .tcard{gap:10px}
 .remind{appearance:none;border:0;display:flex;flex-direction:row;width:100%;justify-content:space-between;align-items:center;text-align:left;cursor:pointer;font:inherit;color:var(--ink);background:var(--accent-soft)}
 .remind > span:last-child{font-size:22px;color:var(--accent)}
+
+.tpick{background:var(--surface);border-radius:22px;box-shadow:var(--card-shadow);overflow:hidden}
+.tp-h{appearance:none;border:0;background:transparent;width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 18px 6px;text-align:left;cursor:pointer;color:var(--ink);font:inherit}
+.tp-n{display:block;font-size:18px;font-weight:800;letter-spacing:-.015em}
+.tp-h .h{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.tp-chev{font-size:24px;color:var(--muted);transition:transform .2s ease;flex:none}
+.tpick.open .tp-chev{transform:rotate(90deg)}
+.tp-body{padding:4px 18px 0}
+.tp-body small{color:var(--muted);font-size:12px}
+.tp-f{display:flex;justify-content:flex-end;padding:8px 14px 14px}
+.tagp{font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:6px;vertical-align:2px;white-space:nowrap}
+.tlist{display:flex;flex-direction:column;gap:10px}
 </style>
 <style>
 html,body{margin:0}
@@ -1527,7 +1539,7 @@ function mkSessEx(plan){
 function startSession(dayId){
   const d=dayById(dayId); if(!d) return;
   TR().active={id:uid("s"),dayId,name:d.name,focus:d.focus||"",date:dateKey,start:Date.now(),ex:d.ex.map(mkSessEx)};
-  TR().rest=null; tab="workout"; commit(); window.scrollTo(0,0);
+  TR().rest=null; mode="train"; tab="workout"; commit(); window.scrollTo(0,0);
 }
 function weekStart(){const n=new Date(); n.setHours(0,0,0,0); n.setDate(n.getDate()-((n.getDay()+6)%7)); return n.getTime()}
 function sessVolume(s){return s.ex.reduce((a,e)=>a+e.sets.filter(x=>x.done).reduce((b,x)=>b+num(x.w)*num(x.reps),0),0)}
@@ -1589,25 +1601,28 @@ setInterval(tick,500);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden) tick()});
 
 /* ---------- Вкладка «Тренировка» ---------- */
+let openTr=null;
+function lastDoneTxt(id){const T=TR(); for(let i=T.sessions.length-1;i>=0;i--) if(T.sessions[i].dayId===id) return new Date(T.sessions[i].start).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}); return null}
+function trainingList(){
+  const T=TR(), planId=T.week[todayIdx];
+  return T.days.map(d=>{const open=openTr===d.id, ld=lastDoneTxt(d.id);
+    return `<article class="tpick${open?" open":""}">
+      <button class="tp-h" data-act="t_toggle" data-id="${d.id}" aria-expanded="${open}"><span class="w"><span class="tp-n">${esc(d.name)}${d.id===planId?` <span class="tagp">по плану сегодня</span>`:""}</span><span class="h">${esc(d.focus||"")} · ${d.ex.length} упр.${ld?" · был "+ld:""}</span></span><span class="tp-chev" aria-hidden="true">›</span></button>
+      ${open?`<div class="tp-body">${d.ex.map(e=>{const l=lastFor(e.name); const w=l?Math.max(...l.e.sets.filter(x=>x.done).map(x=>num(x.w))):null;
+        return `<div class="nm-i"><span>${esc(e.name)}${w!=null?` <small>${fmtW(w)} кг</small>`:""}</span><b class="num">${e.sets}×${esc(e.reps)}</b></div>`}).join("")}</div>`:""}
+      <div class="tp-f"><button class="btn small primary" data-act="t_start" data-id="${d.id}">Начать</button></div>
+    </article>`}).join("");
+}
 function viewWorkout(){
   const T=TR(), a=T.active;
   if(a) return viewActive(a);
-  const todayId=T.week[todayIdx], today=todayId?dayById(todayId):null;
   const ws=weekStart(), thisWeek=T.sessions.filter(x=>x.start>=ws).length, planned=T.week.filter(Boolean).length;
   const last=T.sessions[T.sessions.length-1];
-  const lastDone=id=>{for(let i=T.sessions.length-1;i>=0;i--) if(T.sessions[i].dayId===id) return new Date(T.sessions[i].start).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}); return "ещё не было"};
-  const fmt=now.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
-  let h=`<header class="toprow"><div><div class="eyebrow">Сегодня · ${fmt}</div><h1>${today?esc(today.name):"День отдыха"}</h1><div class="sub">${today?esc(today.focus||""):"По плану сегодня отдых. Можно начать любую тренировку ниже."}</div></div>${syncHtml()}</header>`;
-  h+=`<section class="card"><div class="kpi"><div><span class="num big">${thisWeek}</span> <span class="of">из ${planned} тренировок на этой неделе</span></div><span class="pill ${thisWeek>=planned&&planned?"ok":"neutral"}">${thisWeek>=planned&&planned?"план выполнен":"в процессе"}</span></div>
-    ${last?`<div class="note">Последняя: <b>${esc(last.name)}</b> · ${new Date(last.start).toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"})} · ${fmtDur((last.end||last.start)-last.start)} · ${sessSets(last)} подходов</div>`:`<div class="note">Здесь появится статистика после первой тренировки.</div>`}</section>`;
-  if(today){
-    h+=`<article class="meal"><div class="mhead"><div class="t"><div class="mname">${esc(today.name)}</div><div class="sub">${esc(today.focus||"")}</div></div><div class="mk"><span class="num">${today.ex.length}</span>упр.</div></div>
-      <ul class="items">${today.ex.map(e=>{const l=lastFor(e.name); const w=l?Math.max(...l.e.sets.filter(x=>x.done).map(x=>num(x.w))):null;
-        return `<li><div class="item" style="cursor:default"><span class="w">${esc(e.name)}<span class="h">${w!=null?"последний вес "+fmtW(w)+" кг":"&nbsp;"}</span></span><span class="g num" style="gap:0">${e.sets}×${esc(e.reps)}</span></div></li>`}).join("")}</ul>
-      <div class="mfoot"><span class="note tip">Отдых по умолчанию в каждом упражнении</span><button class="btn primary" data-act="t_start" data-id="${today.id}">Начать тренировку</button></div></article>`;
-  }
-  h+=`<div class="grp">${today?"Другие тренировки":"Все тренировки"}</div>`;
-  h+=T.days.filter(d=>!today||d.id!==today.id).map(d=>`<div class="opt" style="cursor:default"><span class="top"><span class="ttl">${esc(d.name)}</span><span class="res">${d.ex.length} упр.</span></span><span class="ing">${esc(d.focus||"")}</span><span class="res">Последний раз: ${lastDone(d.id)}</span><span><button class="btn small primary" data-act="t_start" data-id="${d.id}">Начать</button></span></div>`).join("");
+  let h=`<header class="toprow"><div><div class="eyebrow">Тренировки</div><h1>Выберите тренировку</h1></div>${syncHtml()}</header>`;
+  h+=`<section class="card slab"><div class="kpi"><div><span class="num big">${thisWeek}</span> <span class="of">из ${planned} на этой неделе</span></div><span class="pill ${thisWeek>=planned&&planned?"ok":"neutral"}">${thisWeek>=planned&&planned?"план выполнен":"в процессе"}</span></div>
+    ${last?`<div class="note">Последняя: ${esc(last.name)} · ${new Date(last.start).toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"short"})} · ${fmtDur((last.end||last.start)-last.start)}</div>`:""}</section>`;
+  h+=trainingList();
+  h+=`<p class="note">Нажмите на тренировку, чтобы посмотреть упражнения. Метка «по плану сегодня» берётся из «Программа → Неделя».</p>`;
   return h;
 }
 function viewActive(a){
@@ -1736,7 +1751,9 @@ document.addEventListener("click",e=>{
   if(a==="mode"){mode=b.dataset.v; try{localStorage.setItem("ration_mode",mode)}catch(x){} tab=mode==="train"?"workout":mode==="body"?"photos":mode==="today"?"today":"day"; editDay=null; render(); window.scrollTo(0,0); return}
   if(!a.startsWith("t_")) return;
   const T=TR(), A=T.active;
-  if(a==="t_start"){if(A){openSheet("Уже идёт тренировка",`<div class="note">Сейчас идёт «${esc(A.name)}». Сначала завершите или отмените её.</div><button class="btn primary block" data-act="t_goactive">Открыть текущую</button>`); return} startSession(b.dataset.id); return}
+  if(a==="t_start"){if(A){openSheet("Уже идёт тренировка",`<div class="note">Сейчас идёт «${esc(A.name)}». Сначала завершите или отмените её.</div><button class="btn primary block" data-act="t_goactive">Открыть текущую</button>`); return} closeSheet(); startSession(b.dataset.id); return}
+  if(a==="t_toggle"){openTr=openTr===b.dataset.id?null:b.dataset.id; render(); return}
+  if(a==="t_pick"){openSheet("Какую тренировку делаем?",`<div class="tlist">${T.days.map(d=>`<button class="opt" data-act="t_start" data-id="${d.id}"><span class="top"><span class="ttl">${esc(d.name)}${d.id===T.week[todayIdx]?` <span class="tagp">по плану</span>`:""}</span><span class="res">${d.ex.length} упр.</span></span><span class="ing">${esc(d.focus||"")}</span>${lastDoneTxt(d.id)?`<span class="res">Последний раз: ${lastDoneTxt(d.id)}</span>`:""}</button>`).join("")}</div>`); return}
   if(a==="t_goactive"){closeSheet(); mode="train"; tab="workout"; render(); return}
   if(a==="t_done"){const ex=A.ex[+b.dataset.e], st=ex.sets[+b.dataset.s]; st.done=!st.done;
     if(st.done){const si=+b.dataset.s, prev=ex.sets.slice(0,si).reverse().find(x=>x.done); if(st.w==="") st.w=st.pw||(prev?String(prev.w):"0"); if(st.reps==="") st.reps=st.pr||(prev?String(prev.reps):"0"); ex.sets.slice(si+1).forEach(x=>{if(!x.done){x.pw=String(st.w); if(!x.pr) x.pr=String(st.reps)}}); const isLast=ex.sets.every(x=>x.done)&&A.ex.indexOf(ex)===A.ex.length-1; if(!isLast) startRest(ex.rest||90,ex.name)}
@@ -2155,8 +2172,21 @@ function cycleCard(){
 let qrInst=null;
 function loadQR(){ if(window.__Html5QrcodeLibrary__) return Promise.resolve();
   return new Promise((res,rej)=>{const sc=document.createElement("script"); sc.src="html5-qrcode.min.js"; sc.onload=res; sc.onerror=()=>rej(new Error("lib")); document.head.appendChild(sc)})}
+let camStreams=[];
+function killCamera(){ // жёстко выключить камеру: остановить все видеопотоки
+  document.querySelectorAll("#qrReader video, video").forEach(v=>{const st=v.srcObject; if(st&&st.getTracks) st.getTracks().forEach(t=>{try{t.stop()}catch(e){}}); v.srcObject=null});
+  camStreams.forEach(st=>{try{st.getTracks().forEach(t=>t.stop())}catch(e){}}); camStreams=[];
+}
 function stopScan(){ const box=document.getElementById("qrBox"); if(box) box.hidden=true;
-  if(qrInst){ const q=qrInst; qrInst=null; try{q.stop().then(()=>q.clear()).catch(()=>{})}catch(e){} } }
+  if(qrInst){ const q=qrInst; qrInst=null; killCamera(); try{q.stop().then(()=>{try{q.clear()}catch(e){}}).catch(()=>{}).finally(killCamera)}catch(e){} }
+  else killCamera(); }
+// запоминаем каждый поток камеры, чтобы точно его выключить
+if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&!navigator.mediaDevices.__wrapped){
+  const orig=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia=async c=>{const st=await orig(c); camStreams.push(st); return st}; navigator.mediaDevices.__wrapped=true;
+}
+document.addEventListener("visibilitychange",()=>{if(document.hidden) stopScan()});
+window.addEventListener("pagehide",()=>stopScan());
 function scanMsg(t,warn){const m=document.getElementById("scanMsg"); if(m){m.className=warn?"hint warn":"note"; m.textContent=t}}
 async function lookupBarcode(code){
   const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_ru,product_name_de,generic_name,brands,quantity,nutriments`);
@@ -2373,9 +2403,10 @@ function viewToday(){
     h+=`<section class="card slab tcard"><div class="kpi"><div><span class="dh-lbl">Идёт сейчас</span><div class="nm-t">${esc(a.name)}</div></div><span class="pill neutral">${dn} / ${total}</span></div><div class="bar"><i style="width:${total?dn/total*100:0}%"></i></div><button class="btn primary block" data-act="td_go" data-m="train" data-t="workout">Продолжить</button></section>`;
   } else if(sesToday.length){const s=sesToday[sesToday.length-1];
     h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${esc(s.name)} ✓</div><div class="sub" style="display:block">${fmtDur((s.end||s.start)-s.start)} · ${sessSets(s)} подходов · ${Math.round(sessVolume(s))} кг объём</div></div><span class="pill ok">сделано</span></div></section>`;
-  } else if(pd){
-    h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${esc(pd.name)}</div><div class="sub" style="display:block">${esc(pd.focus||"")} · ${pd.ex.length} упражнений</div></div></div><button class="btn primary block" data-act="t_start" data-id="${pd.id}">Начать тренировку</button></section>`;
-  } else h+=`<section class="card tcard"><div class="nm-t">День отдыха</div><div class="sub" style="display:block">Восстановление тоже часть прогресса. Хорошо бы набрать шаги.</div></section>`;
+  } else {
+    h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${pd?"По плану: "+esc(pd.name):"По плану отдых"}</div><div class="sub" style="display:block">${pd?esc(pd.focus||""):"Можно выбрать любую тренировку"}</div></div></div>
+      <button class="btn ${pd?"":"primary "}block" data-act="t_pick">Выбрать тренировку</button>${pd?`<button class="btn primary block" data-act="t_start" data-id="${pd.id}">Начать «${esc(pd.name)}»</button>`:""}</section>`;
+  }
 
   const ws=weightsAsc(), ser=trendSeries(ws), lw=ser[ser.length-1], R=weeklyRate(ser);
   h+=`<div class="grp">Вес</div><section class="card"><div class="kpi"><div><span class="num big" style="font-size:30px">${lw?fmtW(Math.round(lw.tr*10)/10):fmtW(S.profile.weight)}</span> <span class="of">кг${lw?" · тренд":""}${R?" · "+signed(R.rate,"кг/нед",2):""}</span></div></div>
