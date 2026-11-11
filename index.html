@@ -469,6 +469,9 @@ function fix(s){ // защитить от неполных или старых �
   if(!s.train.step) s.train.step=2.5;
   if(!s.body||!Array.isArray(s.body.entries)) s.body={entries:[]};
   if(!s.pantry||typeof s.pantry!=="object") s.pantry={};
+  if(!s.plans||typeof s.plans!=="object") s.plans={};
+  if(!s.planGoal) s.planGoal=s.profile.goal||"cut";
+  if(!Array.isArray(s.baseSchedule)||s.baseSchedule.length!==7) s.baseSchedule=clone(d.schedule);
   s.v=1; return s;
 }
 function wrap(state,name){const id="a"+Date.now().toString(36); return {v:2,active:id,updatedAt:0,accounts:{[id]:{name:name||"Основной",state:fix(state)}}}}
@@ -578,7 +581,7 @@ function viewDay(){
   const [st,stTxt]=kcalState(tot[0],T.kcal);
   const pLow=tot[1]<T.p*0.9, fHigh=tot[2]>T.fLimit;
   const fmt=now.toLocaleDateString("ru-RU",{day:"numeric",month:"long"});
-  let h=`<header class="toprow"><div><div class="eyebrow">${isToday?"Сегодня · "+fmt:"Другой день недели"}</div><h1>${WDF[d][0].toUpperCase()+WDF[d].slice(1)}</h1><div class="sub">День ${d+1} из 7</div></div>${syncHtml()}</header>`;
+  let h=`<header class="toprow"><div><div class="eyebrow">${isToday?"Сегодня · "+fmt:"Другой день недели"}</div><h1>${WDF[d][0].toUpperCase()+WDF[d].slice(1)}</h1><div class="sub">День ${d+1} из 7 · план «${GOALS[S.planGoal]||""}»</div></div>${syncHtml()}</header>`;
 
   h+=`<section class="card" aria-label="Итог дня">
     <div class="kpi"><div><span class="num big">${r(tot[0])}</span> <span class="of">из ${r(T.kcal)} ккал по плану</span></div><span class="pill ${st}">${stTxt}</span></div>
@@ -638,7 +641,7 @@ function viewMine(){
 function shopIdeas(){
   const inWeek=new Set(); for(let d=0;d<7;d++) S.slots.forEach(s=>variantOf(s,d).items.forEach(it=>{const p=P(it.pid); inWeek.add(p?.catId||it.pid)}));
   const map={};
-  S.slots.forEach(s=>(RECIPES[s.key]||[]).forEach(rec=>rec.items.forEach(([cid])=>{if(inWeek.has(cid)) return; (map[cid]=map[cid]||new Set()).add(rec.name)})));
+  S.slots.forEach(s=>(recipesFor(s.key)).forEach(rec=>rec.items.forEach(([cid])=>{if(inWeek.has(cid)) return; (map[cid]=map[cid]||new Set()).add(rec.name)})));
   const rows=Object.entries(map).map(([cid,set])=>[srcOf(cid),[...set]]).filter(x=>x[0]);
   if(!rows.length) return "";
   return `<div class="grp">Для других блюд (не в текущей неделе)</div>
@@ -803,12 +806,12 @@ function sheetChoose(){
     return `<button class="opt${isCur?" cur":""}" data-act="${act}" ${attrs}><span class="top"><span class="ttl">${esc(name)}</span><span class="gr num" style="font-size:16px">${r(m[0])} ккал</span></span><span class="ing">${esc(ingr)}</span>${tip?`<span class="res">${esc(tip)}</span>`:""}${buy?`<span class="buy">Нужно купить: ${esc(buy)}</span>`:""}<span class="res">Белок ${r(m[1])} г. День с ним: <span class="num">${r(res[0])}</span> ккал, белок <span class="num">${r(res[1])}</span> г</span><span>${isCur?`<span class="pill neutral">сейчас</span> `:""}${verdict(res,T)}</span></button>`};
   const ingrOf=items=>items.map(([n,g])=>`${n.split(" (")[0]} ${r(g)} г`).join(" · ");
   const mine=s.variants.map((v,i)=>card("choosev",`data-v="${i}"`,v.name,sumItems(v.items),ingrOf(v.items.map(it=>[P(it.pid)?.name||"?",it.g])),"","",i===cur)).join("");
-  const recs=(RECIPES[s.key]||[]).filter(rec=>!s.variants.some(v=>v.recipe===rec.id)).map(rec=>card("chooser",`data-r="${rec.id}"`,rec.name,recMac(rec),ingrOf(rec.items.map(([cid,g])=>[srcOf(cid)?.name||"?",g])),rec.tip,recMissing(rec).join(", "),false)).join("");
+  const recs=recipesFor(s.key).filter(rec=>!s.variants.some(v=>v.recipe===rec.id)).map(rec=>card("chooser",`data-r="${rec.id}"`,rec.name,recMac(rec),ingrOf(rec.items.map(([cid,g])=>[srcOf(cid)?.name||"?",g])),rec.tip,recMissing(rec).join(", "),false)).join("");
   openSheet(esc(s.name)+": что съесть",`
     <div class="seg"><button data-act="chonly" data-v="1" aria-pressed="${ctx.onlyDay!==false}">Только ${WDF[d]}</button><button data-act="chonly" data-v="0" aria-pressed="${ctx.onlyDay===false}">На всю неделю</button></div>
     <div class="grp">Мои варианты</div>${mine}
     ${S.dishes.length?`<div class="grp">Мои блюда (граммы подогнаны)</div>${S.dishes.map(ds=>{const f=fitDish(ds.items,ctx.s,d,"side"); return card("choosed",`data-id="${esc(ds.id)}"`,ds.name,f.m,ingrOf(f.items.map(it=>[P(it.pid)?.name||"?",it.g])),f.bad||"Порция подогнана под этот приём.","",false)}).join("")}`:""}
-    ${recs?`<div class="grp">Новые идеи под сушку</div>${recs}`:""}
+    ${recs?`<div class="grp">${S.planGoal==="cut"?"Новые идеи под сушку":"Идеи из меню «"+GOALS[S.planGoal]+"»"}</div>${recs}`:""}
     <button class="btn ghost block" data-act="variants" data-s="${ctx.s}">Настроить варианты (переименовать, копия, удалить)</button>`);
 }
 function setVariantFor(si,vi){const s=S.slots[si]; if(ctx.onlyDay===false) S.schedule.forEach(day=>day[s.key]=vi); else S.schedule[selDay][s.key]=vi}
@@ -901,8 +904,10 @@ function goalRes(){
     ${cmpRow("Углеводы",avg[3],avg[3],T.c,"г",Math.abs(avg[3]-T.c)<=35?"ok":"warn").replace(/→ <b>[^<]*<\/b>/,"")}
   </div>
   <div class="note">Слева рацион сейчас (в среднем за день), справа цель.</div>
+  <div class="hint">${planInfo()}</div>
   <button class="btn primary block" data-act="planfit">Пересчитать рацион под эти цифры</button>
-  ${S.planUndo?`<button class="btn ghost block" data-act="planundo">↺ Вернуть рацион как был до пересчёта</button>`:""}`;
+  ${S.planUndo?`<button class="btn ghost block" data-act="planundo">↺ Вернуть рацион как был до пересчёта</button>`:""}
+  ${S.planGoal!=="cut"||S.plans.cut?`<button class="btn ghost block" data-act="planregen">Собрать план «${GOALS[S.planGoal]}» заново из готового меню</button><div id="regenBox"></div>`:""}`;
 }
 
 /* ---------- Резервная копия и перенос между версиями ---------- */
@@ -1198,7 +1203,7 @@ function sheetFix(){
 }
 /* ---------- Вернуть день к стандарту ---------- */
 const DAYTAG=/ · (Пн|Вт|Ср|Чт|Пт|Сб|Вс)$/;
-function stdIdx(s,d){const i=(DEFAULT.schedule[d]||{})[s.key]||0; const v=s.variants.findIndex((x,j)=>j>=i&&!DAYTAG.test(x.name)); return v<0?0:Math.min(i,s.variants.length-1)}
+function stdIdx(s,d){const i=((S.baseSchedule||DEFAULT.schedule)[d]||{})[s.key]||0; const v=s.variants.findIndex((x,j)=>j>=i&&!DAYTAG.test(x.name)); return v<0?0:Math.min(i,s.variants.length-1)}
 function isStd(d){return S.slots.every(s=>vIdx(s,d)===stdIdx(s,d))}
 function sheetRestore(){
   const d=selDay, ch=S.slots.filter(s=>vIdx(s,d)!==stdIdx(s,d));
@@ -1708,6 +1713,67 @@ document.addEventListener("input",e=>{const t=e.target; if(!t.dataset||!t.datase
   commit(false); shRefresh(id)});
 
 
+
+/* ---------- Отдельный план питания для каждой цели ---------- */
+const BULK_MENU={
+ breakfast:[
+  {id:"gb_oats",name:"Овсянка на молоке с бананом",items:[["c_oats",80],["c_milk",300],["c_banana",120],["c_pb",15],["c_whey",25]],tip:"Овсянку сварить на молоке, сверху банан и ложка арахисовой пасты, протеин размешать в конце."},
+  {id:"gb_omelet",name:"Омлет из 4 яиц с тостами",items:[["egg",240],["bread",112.5],["c_cheese_light",30]],tip:"Омлет на сухой сковороде, сыр сверху, 3 тоста."},
+  {id:"gb_tvorog",name:"Творог с овсянкой и бананом",items:[["tvorog",250],["c_oats",60],["c_banana",120],["c_pb",15]],tip:"Смешать всё в миске, можно с вечера."},
+  {id:"gb_toast",name:"Тосты с ветчиной и яйцами",items:[["bread",112.5],["ham",75],["egg",120],["c_cucumber",150],["c_milk",250]],tip:"Тосты с ветчиной и яйцом, стакан молока."}],
+ lunch:[
+  {id:"gl_chicken",name:"Курица с рисом и овощами",items:[["chicken",250],["rice",140],["veg",200],["oil",10]],tip:"Как обычный обед, только порция больше."},
+  {id:"gl_buck",name:"Гречка с говяжьим фаршем",items:[["c_beef5",220],["c_buckwheat",120],["c_cucumber",150],["oil",10]],tip:"Фарш с луком, смешать с гречкой."},
+  {id:"gl_pasta",name:"Паста с курицей в томате",items:[["chicken",220],["penne",130],["c_passata",200],["oil",10]],tip:"Курицу кубиками обжарить, залить пассатой, смешать с пенне."},
+  {id:"gl_fish",name:"Рыба с картошкой и брокколи",items:[["c_pollock",300],["c_potato",600],["c_broccoli",200],["oil",10]],tip:"Всё на противень: картошка 25 мин, потом рыба и брокколи ещё 15 мин."},
+  {id:"gl_turkey",name:"Индейка с рисом",items:[["c_turkey",250],["rice",130],["veg",200],["oil",10]],tip:"Индейку обжарить с паприкой и чесноком."}],
+ snack:[
+  {id:"gs_tvorog",name:"Творог с бананом и орехами",items:[["tvorog",250],["c_banana",120],["c_nuts",25]],tip:"Банан нарезать, орехи порубить."},
+  {id:"gs_shake",name:"Протеиновый коктейль",items:[["c_whey",40],["c_milk",400],["c_banana",120],["c_oats",40]],tip:"Всё в блендер на 30 секунд. Удобно сразу после тренировки."},
+  {id:"gs_tuna",name:"Бутерброды с тунцом",items:[["tuna",150],["bread",112.5],["c_cucumber",100]],tip:"Тунец с горчицей на тостах с огурцом."},
+  {id:"gs_skyr",name:"Скир с гранолой и ягодами",items:[["c_skyr",450],["c_granola",60],["c_berries",100]],tip:"Гранола сверху перед едой, чтобы хрустела."}],
+ dinner:[
+  {id:"gd_salmon",name:"Лосось с рисом",items:[["c_salmon",200],["rice",90],["veg",200]],tip:"Лосось 12-15 мин в духовке на 200°."},
+  {id:"gd_shrimp",name:"Паста с креветками",items:[["c_shrimp",250],["penne",120],["c_passata",200],["oil",10]],tip:"Креветки 3-4 мин с чесноком, потом пассата и пенне."},
+  {id:"gd_bowl",name:"Боул с фаршем и фасолью",items:[["c_beef5",200],["c_beans",250],["rice",70],["oil",5]],tip:"Как чили: фарш, фасоль, паприка, подать с рисом."},
+  {id:"gd_chicken",name:"Курица с запечённой картошкой",items:[["chicken",220],["c_potato",500],["veg",200],["oil",10]],tip:"Картошку дольками и курицу на один противень, 35 мин."},
+  {id:"gd_turkey",name:"Индейка с макаронами",items:[["c_turkey",220],["penne",110],["c_passata",150],["oil",10]],tip:"Индейку тушить в пассате, смешать с пенне."}],
+ late:[
+  {id:"gn_tvorog",name:"Творог с ягодами",items:[["tvorog",200],["c_berries",100]],tip:"Медленный белок на ночь."},
+  {id:"gn_quark",name:"Кварк с орехами",items:[["c_quark",250],["c_nuts",15]],tip:"Кварк размешать с каплей воды."}]
+};
+function recipesFor(key){return S.planGoal==="cut"?(RECIPES[key]||[]):(BULK_MENU[key]||[])}
+function planInfo(){
+  const nV=S.slots.reduce((a,s)=>a+s.variants.length,0), others=Object.keys(S.plans).filter(g=>g!==S.planGoal);
+  return `Сейчас рацион для цели <b>«${GOALS[S.planGoal]}»</b>: ${S.slots.length} приёма пищи, ${nV} блюд. У каждой цели свой план: при смене цели текущий план сохраняется, а план новой цели открывается${others.length?`. Сохранены планы: ${others.map(g=>"«"+GOALS[g]+"»").join(", ")}`:""}.`;
+}
+const NUTRI_KEYS=["manualKcal","pPerKg","fPerKg","pace","bpace"];
+function switchGoal(g){
+  const old=S.planGoal||S.profile.goal||"cut";
+  S.plans[old]={slots:S.slots,schedule:S.schedule,base:S.baseSchedule,prof:Object.fromEntries(NUTRI_KEYS.map(k=>[k,S.profile[k]]))};
+  S.profile.goal=g; S.planUndo=null;
+  const saved=S.plans[g];
+  if(saved&&saved.slots){
+    S.slots=saved.slots; S.schedule=saved.schedule; S.baseSchedule=saved.base||clone(saved.schedule);
+    if(saved.prof) NUTRI_KEYS.forEach(k=>{if(saved.prof[k]!==undefined) S.profile[k]=saved.prof[k]});
+    S.planGoal=g;
+  } else {
+    const m=recMacros(g); S.profile.manualKcal=0; S.profile.pPerKg=m.p; S.profile.fPerKg=m.f;
+    buildPlan(g);
+  }
+  delete S.plans[g];
+  selDay=todayIdx;
+}
+function buildPlan(g){
+  S.planGoal=g; S.planUndo=null;
+  if(g==="cut"){const d=clone(DEFAULT); S.slots=d.slots; S.schedule=d.schedule; S.baseSchedule=clone(d.schedule); return}
+  const defs=[["breakfast","Завтрак"],["lunch","Обед"],["snack","Перекус"],["dinner","Ужин"]].concat(g==="bulk"?[["late","Перед сном"]]:[]);
+  S.slots=defs.map(([key,name])=>({key,name,variants:BULK_MENU[key].map(rec=>({name:rec.name,recipe:rec.id,items:rec.items.map(([cid,gr])=>({pid:ensureProd(cid),g:gr}))}))}));
+  S.schedule=[0,1,2,3,4,5,6].map(d=>Object.fromEntries(defs.map(([key])=>[key,d%BULK_MENU[key].length])));
+  S.baseSchedule=clone(S.schedule);
+  const res=fitPlan(); ctx={plan:res}; applyPlanFit(); ctx={}; S.planUndo=null;
+}
+
 /* ---------- Пересчёт всего рациона под новые цели ---------- */
 function fitPlan(){
   // Понятная логика: белковые продукты держат белок, масло и жирное держат жиры, крупы/хлеб/картофель добирают калории.
@@ -1738,6 +1804,18 @@ function fitPlan(){
   const days=[0,1,2,3,4,5,6].map(d=>S.slots.map((s,si)=>si+":"+vIdx(s,d)));
   const byKey={}; items.forEach(x=>(byKey[x.key]=byKey[x.key]||[]).push(x));
   const dayTot=d=>days[d].reduce((a,k)=>(byKey[k]||[]).reduce((b,x)=>b.map((v,i)=>v+x.u[i]*x.g),a),[0,0,0,0]);
+  // Доводка по каждому дню: чтобы не только среднее, а каждый день был в цели
+  items.forEach(x=>{x.gf=x.g; const lo={P:0.85,F:0,C:0.5,M:0.6}[x.role], hi={P:1.1,F:2,C:1.6,M:1.3}[x.role];
+    x.lo=x.piece?Math.max(x.role==="C"||x.role==="M"?x.piece:0,Math.floor(x.g*lo/x.piece)*x.piece):x.g*lo; x.hi=x.piece?Math.ceil(x.g*hi/x.piece)*x.piece:x.g*hi+(x.role==="F"?5:0);
+    x.st=x.piece||5; x.w=x.role==="P"?1:x.role==="C"?0.1:0.3});
+  const dcost=()=>{let c=0; for(let d=0;d<7;d++){const t=dayTot(d);
+      const ek=(t[0]-T.kcal)/(T.kcal*0.02), ef=Math.max(0,t[2]-T.fLimit)/3, ef2=(t[2]-T.f)/8, ep=Math.max(0,T.p*0.95-t[1])/4, ec=(t[3]-T.c)/25;
+      c+=ek*ek+ef*ef+ef2*ef2*0.5+ep*ep+ec*ec*0.3}
+    for(const x of items){if(!x.gf) continue; const rel=(x.g-x.gf)/Math.max(x.gf,20); c+=rel*rel*x.w*7} return c};
+  let dc=dcost();
+  for(let n=0;n<1500;n++){let best=null;
+    for(const x of items){for(const ng of [x.g-x.st,x.g+x.st]){if(ng<x.lo-0.01||ng>x.hi+0.01||ng<0) continue; const o=x.g; x.g=ng; const c=dcost(); x.g=o; if(c<dc-1e-6&&(!best||c<best.c)) best={x,ng,c}}}
+    if(!best) break; best.x.g=best.ng; dc=best.c}
   const before=[0,1,2,3,4,5,6].reduce((a,d)=>add(a,dayTotal(d)),Z()).map(v=>v/7);
   const after=[0,1,2,3,4,5,6].reduce((a,d)=>add(a,dayTot(d)),Z()).map(v=>v/7);
   return {items,before,after,T};
@@ -1887,7 +1965,7 @@ document.addEventListener("click",e=>{
   if(a==="choose"){ctx={s:+b.dataset.s,onlyDay:true}; sheetChoose(); return}
   if(a==="chonly"){ctx.onlyDay=b.dataset.v==="1"; sheetChoose(); return}
   if(a==="choosev"){setVariantFor(ctx.s,+b.dataset.v); closeSheet(); commit(); return}
-  if(a==="chooser"){const s=S.slots[ctx.s], rec=(RECIPES[s.key]||[]).find(x=>x.id===b.dataset.r); if(!rec) return;
+  if(a==="chooser"){const s=S.slots[ctx.s], rec=recipesFor(s.key).find(x=>x.id===b.dataset.r); if(!rec) return;
     let vi=s.variants.findIndex(v=>v.recipe===rec.id);
     if(vi<0){s.variants.push({name:rec.name,recipe:rec.id,items:rec.items.map(([cid,g])=>({pid:ensureProd(cid),g}))}); vi=s.variants.length-1}
     setVariantFor(ctx.s,vi); closeSheet(); commit(); return}
@@ -1913,7 +1991,9 @@ document.addEventListener("click",e=>{
     return}
   if(a==="delprod"){document.getElementById("delConfirm").innerHTML=`<div class="hint warn">Продукт пропадёт из списка и из всех приёмов пищи.</div><button class="btn danger block" data-act="delok">Да, удалить</button>`; return}
   if(a==="delok"){const id=ctx.pidEdit; S.dishes.forEach(ds=>ds.items=ds.items.filter(it=>it.pid!==id)); S.products=S.products.filter(p=>p.id!==id); S.slots.forEach(s=>s.variants.forEach(v=>v.items=v.items.filter(it=>it.pid!==id))); closeSheet(); commit(); return}
-  if(a==="seg"&&b.dataset.k==="goal"&&S.profile.goal!==b.dataset.v){const m=recMacros(b.dataset.v); S.profile.goal=b.dataset.v; S.profile.manualKcal=0; S.profile.pPerKg=m.p; S.profile.fPerKg=m.f; commit(); return}
+  if(a==="seg"&&b.dataset.k==="goal"&&S.profile.goal!==b.dataset.v){switchGoal(b.dataset.v); commit(); return}
+  if(a==="planregen"){document.getElementById("regenBox").innerHTML=`<div class="hint warn">Собрать план «${GOALS[S.planGoal]}» заново из готового меню? Ваши изменения в этом плане пропадут, планы других целей не тронутся.</div><button class="btn danger block" data-act="planregenok">Да, собрать заново</button>`; return}
+  if(a==="planregenok"){buildPlan(S.planGoal); commit(); return}
   if(a==="seg"){S.profile[b.dataset.k]=b.dataset.v; commit(); return}
   if(a==="bkcopy"){const t=exportText(); const box=document.getElementById("bkOutBox");
     const show=()=>{box.innerHTML=`<div class="field"><label for="bkOut">Выделите и скопируйте</label><textarea id="bkOut" rows="3" readonly></textarea></div>`; const ta=document.getElementById("bkOut"); ta.value=t; ta.focus(); ta.select()};
