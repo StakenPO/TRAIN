@@ -584,6 +584,11 @@ body.notabs .restbar{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 .wk-s .num{font-size:18px;font-weight:700}.wk-s small{font-size:11px;color:var(--muted)}
 .card.wk.cur{box-shadow:inset 0 0 0 1.5px var(--accent)}
 .card.slab input[type=date]{color-scheme:dark}
+
+/* v4: покупки */
+.ub{appearance:none;border:0;background:var(--accent-soft);color:var(--accent);font:inherit;font-size:12.5px;font-weight:700;border-radius:9px;height:36px;min-width:44px;padding:0 8px;cursor:pointer}
+.seg-s button{font-size:13px}
+.shrow .shtop .x{margin-left:auto}
 </style>
 <style>
 html,body{margin:0}
@@ -749,6 +754,7 @@ function fix(s){ // защитить от неполных или старых �
   if(!s.train.step) s.train.step=2.5;
   if(!s.body||!Array.isArray(s.body.entries)) s.body={entries:[]};
   if(!s.pantry||typeof s.pantry!=="object") s.pantry={};
+  if(!s.shop||typeof s.shop!=="object"){s.shop={week:"",have:{},bought:{},unit:{},extra:[],sets:[]}; Object.entries(s.pantry).forEach(([id,pe])=>{if(pe&&pe.have!==""&&pe.have!=null) s.shop.have[id]=num(pe.have); if(pe&&pe.bought) s.shop.bought[id]=true})}
   if(!s.plans||typeof s.plans!=="object") s.plans={};
   if(!s.extras||typeof s.extras!=="object") s.extras={};
   if(!Array.isArray(s.weights)){s.weights=[]; ((s.body||{}).entries||[]).forEach(e=>{if(num(e.weight)&&!s.weights.find(x=>x.date===e.date)) s.weights.push({date:e.date,w:num(e.weight)})})}
@@ -940,45 +946,6 @@ function shopIdeas(){
   <section class="card"><div class="list">${rows.map(([p,dishes])=>`<div class="row" style="cursor:default"><span class="w"><span class="n">${esc(p.name)}</span><span class="h">${esc(dishes.join(", "))}</span></span><span class="r num">${p.kcal} ккал<br><span style="color:var(--protein)">Б ${p.p}</span></span></div>`).join("")}</div></section>
   <p class="note tip">Выберите такое блюдо в какой-то день, и продукт сам перейдёт в список на неделю с нужными граммами.</p>`;
 }
-let shFilter="all";
-function shopNeed(){const need={}; for(let d=0;d<7;d++) S.slots.forEach(s=>variantOf(s,d).items.forEach(it=>{need[it.pid]=(need[it.pid]||0)+num(it.g)})); return need}
-const fmtG=g=>g>=1000?(Math.round(g/100)/10+" кг").replace(".",","):r(g)+" г";
-function pcsTxt(p,g,up){const x=g/p.pieceG; const n=up?Math.ceil(x-0.05):Math.round(x*10)/10; return String(n).replace(".",",")+" "+(p.pieceName||"шт")}
-function shopState(id,need){
-  const p=P(id), pe=(S.pantry||{})[id]||{}, have=num(pe.have), left=need-have;
-  if(pe.bought) return {cls:"ok",txt:"куплено",left:0,bought:true};
-  if(left<=need*0.02) return {cls:"ok",txt:have-need>=(p.pieceG||50)?"хватает, останется "+(p.pieceG?pcsTxt(p,have-need):fmtG(Math.floor((have-need)/10)*10)):"хватает",left:0};
-  const t=p.pieceG?pcsTxt(p,left,true):fmtG(Math.ceil(left/50)*50);
-  return {cls:have>0?"warn":"neutral",txt:"докупить "+t,left,short:t};
-}
-function viewShop(){
-  if(!S.pantry) S.pantry={};
-  const need=shopNeed();
-  const rows=Object.entries(need).filter(([id,g])=>P(id)&&g>0).sort((a,b)=>b[1]-a[1]);
-  const st=Object.fromEntries(rows.map(([id,g])=>[id,shopState(id,g)]));
-  const toBuy=rows.filter(([id])=>st[id].left>0);
-  const list=shFilter==="buy"?toBuy:rows;
-  const row=([id,g])=>{const p=P(id), pe=S.pantry[id]||{}, x=st[id], unit=p.pieceG?(p.pieceName||"шт"):"г";
-    const haveV=pe.have!=null&&pe.have!==""?r(num(pe.have)):"";
-    return `<div class="shrow${x.bought?" bought":""}">
-      <div class="shtop"><span class="n">${esc(p.name)}</span><span class="need num">${p.pieceG?pcsTxt(p,g,true):fmtG(g)}</span></div>
-      <div class="h">нужно на 7 дней${p.pieceG?" · "+fmtG(g):""}</div>
-      <div class="shbot">
-        <span class="flabel">Есть дома</span>
-        <div class="qty"><button class="mini" data-act="sh_step" data-id="${esc(id)}" data-d="-1" aria-label="Меньше">−</button><input class="shq" data-sh="${esc(id)}" type="number" inputmode="decimal" value="${haveV}" placeholder="0" aria-label="Есть дома в граммах, ${esc(p.name)}"><span class="u">г</span><button class="mini" data-act="sh_step" data-id="${esc(id)}" data-d="1" aria-label="Больше">+</button></div>
-        <span class="pill ${x.cls}" id="sh_${esc(id)}">${x.txt}</span>
-        ${p.pieceG?`<span class="h" id="shh_${esc(id)}" style="width:100%">${num(pe.have)>0?"дома ≈ "+pcsTxt(p,num(pe.have)):"1 "+esc(p.pieceName||"шт")+" = "+fmtW(p.pieceG)+" г"}</span>`:""}
-        <button class="chkb${x.bought?" on":""}" data-act="sh_buy" data-id="${esc(id)}" aria-pressed="${!!x.bought}" aria-label="Куплено">✓</button>
-      </div></div>`};
-  return `<header class="toprow"><div><div class="eyebrow">На 7 дней по рациону</div><h1>Покупки</h1><div class="sub">Впишите, что есть дома, и приложение посчитает, что докупить</div></div>${syncHtml()}</header>
-  <section class="card"><div class="kpi"><div><span class="num big">${toBuy.length}</span> <span class="of">${toBuy.length===1?"продукт":"продуктов"} докупить из ${rows.length}</span></div><span class="pill ${toBuy.length?"warn":"ok"}">${toBuy.length?"нужно в магазин":"всё есть"}</span></div>
-    ${toBuy.length?`<div class="note shop-sum">${toBuy.map(([id])=>`<b>${esc(P(id).name.split(" (")[0])}</b>: ${st[id].short}`).join(" · ")}</div>`:""}
-    <div class="grid2"><button class="btn block" data-act="sh_copy">Скопировать список</button><button class="btn block ghost" data-act="sh_reset">Новая неделя</button></div><div id="shMsg"></div></section>
-  <div class="seg"><button data-act="sh_f" data-v="all" aria-pressed="${shFilter==="all"}">Всё (${rows.length})</button><button data-act="sh_f" data-v="buy" aria-pressed="${shFilter==="buy"}">Докупить (${toBuy.length})</button></div>
-  <section class="card" style="gap:0;padding-block:4px">${list.map(row).join("")||`<div class="empty">${shFilter==="buy"?"Докупать ничего не нужно":"Рацион пуст"}</div>`}</section>
-  <p class="note tip">Вес считается сырым или сухим, как вы взвешиваете перед готовкой. «✓» отмечает, что вы купили недостающее. «Новая неделя» очищает «есть дома» и отметки.</p>${shopIdeas()}`;
-}
-
 /* ---------- Свои блюда ---------- */
 let editDish=null, dfit={si:3,mode:"side",d:null};
 function isSide(it){const p=P(it.pid); return !!p&&p.c>5&&p.c*4>=p.p*4&&p.c*4>=p.f*9}
@@ -1261,7 +1228,7 @@ function macChips(m){return `<span class="chip num">${r(m[0])} ккал</span><s
 function sheetPicker(mode){
   ctx.mode=mode;
   const excl=mode==="swap"?curVariant().items[ctx.i].pid:null;
-  openSheet(mode==="swap"?"Чем заменить?":mode==="day"?"Добавить в "+WDF[selDay]:mode==="dish"?"Ингредиент":"Что добавить?",`
+  openSheet(mode==="swap"?"Чем заменить?":mode==="day"?"Добавить в "+WDF[selDay]:mode==="dish"?"Ингредиент":mode==="shopx"?"Что купить?":"Что добавить?",`
     <div class="field"><input id="pSearch" type="search" placeholder="Поиск продукта" aria-label="Поиск продукта"></div>
     <div class="list" id="pList">${pickRows("",excl)}</div>
     <button class="btn block" data-act="newprod">+ Новый продукт</button>`);
@@ -1693,7 +1660,8 @@ function viewProgram(){
   h+=`<button class="btn block" data-act="t_dnew">+ Новая тренировка</button>
   <section class="card"><h2>Настройки</h2><span class="flabel">Шаг прибавки веса</span>
     <div class="seg">${[1,1.25,2,2.5,5].map(v=>`<button data-act="t_step" data-v="${v}" aria-pressed="${num(T.step)===v}">${fmtW(v)} кг</button>`).join("")}</div>
-    <div class="note tip">На столько приложение предложит увеличить вес, когда вы выполните все подходы на верхней границе повторов.</div></section>`;
+    <div class="note tip">На столько приложение предложит увеличить вес, когда вы выполните все подходы на верхней границе повторов.</div></section>
+  <button class="btn block ghost" data-act="t_reset">↺ Восстановить исходную программу</button>`;
   return h;
 }
 function viewDayEdit(){
@@ -1710,6 +1678,7 @@ function viewDayEdit(){
       <div><label for="te_r${i}">Повторы</label><input id="te_r${i}" data-te="reps" data-i="${i}" value="${esc(e.reps)}" placeholder="10-12"></div>
       <div><label for="te_t${i}">Отдых, с</label><input id="te_t${i}" data-te="rest" data-i="${i}" type="number" inputmode="numeric" value="${esc(e.rest)}"></div></div>`).join("")||`<div class="empty">Добавьте упражнения</div>`}</div>
     <button class="btn block" data-act="t_eadd">+ Упражнение</button>
+    ${defaultTrain().days.some(x=>x.id===d.id)?`<button class="lnk" data-act="t_dreset">↺ Вернуть исходные упражнения</button>`:""}
   </section>
   <div id="tdMsg" class="note" style="color:var(--bad)"></div>
   <button class="btn primary block" data-act="t_dsave">Сохранить тренировку</button>
@@ -2000,25 +1969,112 @@ document.addEventListener("keydown",e=>{const v=document.getElementById("viewer"
   if(e.key==="Escape") closeViewer(); if(e.key==="ArrowRight"&&viewerI<viewerList.length-1){viewerI++;showViewer()} if(e.key==="ArrowLeft"&&viewerI>0){viewerI--;showViewer()}});
 
 
-/* ---------- Покупки: есть дома / докупить ---------- */
-function shSet(id,haveG){if(!S.pantry) S.pantry={}; const pe=S.pantry[id]=S.pantry[id]||{}; pe.have=haveG; pe.bought=false}
-function shRefresh(id){const need=shopNeed()[id]||0, x=shopState(id,need), el=document.getElementById("sh_"+id); if(el){el.className="pill "+x.cls; el.textContent=x.txt}}
+let shFilter="all", shTab="std";
+const fmtG=g=>g>=1000?(Math.round(g/100)/10+" кг").replace(".",","):r(g)+" г";
+const PLF={"пачка":["пачка","пачки","пачек"],"банка":["банка","банки","банок"],"стакан":["стакан","стакана","стаканов"],"бутылка":["бутылка","бутылки","бутылок"]};
+function plu(n,w){const F=PLF[w]; if(!F) return w; if(n%1) return F[1]; const a=n%10,b=n%100; return a===1&&b!==11?F[0]:a>=2&&a<=4&&(b<12||b>14)?F[1]:F[2]}
+function pcsTxt(p,g,up){const x=g/p.pieceG; const n=up?Math.ceil(x-0.05):Math.round(x*10)/10; return String(n).replace(".",",")+" "+plu(n,p.pieceName||"шт")}
+const NOPC=["ломт.","ч. л.","ст. л.","мерн."];
+function SH(){if(!S.shop||typeof S.shop!=="object") S.shop={}; const s=S.shop; ["have","bought","unit"].forEach(k=>{if(!s[k]||typeof s[k]!=="object") s[k]={}}); if(!Array.isArray(s.extra)) s.extra=[]; if(!Array.isArray(s.sets)) s.sets=[]; return s}
+function unitOf(p){if(!p.pieceG) return "g"; const u=SH().unit[p.id]; if(u) return u; return NOPC.includes(p.pieceName)?"g":"pc"}
+function amtTxt(p,g,up){return unitOf(p)==="pc"?pcsTxt(p,g,up):fmtG(up?Math.ceil(g/50)*50:g)}
+function inUnit(p,g){return unitOf(p)==="pc"?Math.round(g/p.pieceG*10)/10:r(g)}
+function fromUnit(p,v){return unitOf(p)==="pc"?v*p.pieceG:v}
+const unitLbl=p=>unitOf(p)==="pc"?(p.pieceName||"шт"):"г";
+const curWeekIso=()=>isoOf(new Date(weekStart()));
+// Стандартный список: по базовой неделе рациона (правки отдельных дней его не меняют)
+function shopNeed(){const need={}; for(let d=0;d<7;d++) S.slots.forEach(s=>{const bs=(S.baseSchedule||S.schedule)[d]||{}; const v=s.variants[Math.min(bs[s.key]||0,s.variants.length-1)]; (v?v.items:[]).forEach(it=>{need[it.pid]=(need[it.pid]||0)+num(it.g)})}); return need}
+function shopState(id,need){
+  const p=P(id), sh=SH(), have=num(sh.have[id]), left=need-have;
+  if(sh.bought[id]) return {cls:"ok",txt:"куплено",left:0,bought:true};
+  if(left<=need*0.02) return {cls:"ok",txt:have-need>=(p.pieceG||50)?"хватит, останется "+amtTxt(p,have-need):"хватает",left:0};
+  const t=amtTxt(p,left,true);
+  return {cls:have>0?"warn":"neutral",txt:"купить "+t,left,short:t};
+}
+function qtyHtml(p,val,attr,lbl){
+  return `<div class="qty"><button class="mini" data-act="sh_step" ${attr} data-d="-1" aria-label="Меньше">−</button><input class="shq" ${attr.replace(/data-(\w+)=/g,"data-q$1=")} type="number" inputmode="decimal" value="${val}" placeholder="0" aria-label="${esc(lbl)}">${p.pieceG?`<button class="ub" data-act="sh_unit" data-pid="${esc(p.id)}" aria-label="Сменить единицы">${esc(unitLbl(p))}</button>`:`<span class="u">г</span>`}<button class="mini" data-act="sh_step" ${attr} data-d="1" aria-label="Больше">+</button></div>`;
+}
+function viewShop(){
+  const sh=SH(), wk=curWeekIso(); if(!sh.week){sh.week=wk}
+  const newWeek=sh.week!==wk;
+  const need=shopNeed();
+  const rows=Object.entries(need).filter(([id,g])=>P(id)&&g>0).sort((a,b)=>b[1]-a[1]);
+  const st=Object.fromEntries(rows.map(([id,g])=>[id,shopState(id,g)]));
+  const toBuy=rows.filter(([id])=>st[id].left>0);
+  const ex=sh.extra.filter(x=>P(x.pid)), exLeft=ex.filter(x=>!x.bought);
+  const ws=new Date(weekStart()), we=new Date(ws); we.setDate(we.getDate()+6);
+  let h=`<header class="toprow"><div><div class="eyebrow">Неделя ${ws.getDate()} ${MONTHS[ws.getMonth()]} – ${we.getDate()} ${MONTHS[we.getMonth()]}</div><h1>Покупки</h1></div>${syncHtml()}</header>`;
+  if(newWeek) h+=`<section class="card slab"><div class="nm-t" style="color:var(--slab-ink)">Новая неделя</div><div class="note">Начать новый список? Отметки «куплено» и «есть дома» обнулятся, стандартный список останется тем же.</div><div class="grid2"><button class="btn primary block" data-act="sh_resetok">Начать заново</button><button class="btn block" data-act="sh_keep">Оставить как есть</button></div></section>`;
+  h+=`<section class="card"><div class="kpi"><div><span class="num big">${toBuy.length+exLeft.length}</span> <span class="of">купить</span></div><span class="pill ${toBuy.length+exLeft.length?"warn":"ok"}">${toBuy.length+exLeft.length?"нужно в магазин":"всё есть"}</span></div>
+    <div class="grid2"><button class="btn block" data-act="sh_copy">Скопировать список</button><button class="btn block ghost" data-act="sh_reset">Новая неделя</button></div><div id="shMsg"></div></section>
+  <div class="seg"><button data-act="sh_tab" data-v="std" aria-pressed="${shTab==="std"}">Рацион на 7 дней</button><button data-act="sh_tab" data-v="ext" aria-pressed="${shTab==="ext"}">Другие блюда${ex.length?" ("+ex.length+")":""}</button></div>`;
+  if(shTab==="std"){
+    const list=shFilter==="buy"?toBuy:rows;
+    const row=([id,g])=>{const p=P(id), x=st[id], hv=sh.have[id], haveV=hv!=null&&hv!==""?inUnit(p,num(hv)):"";
+      return `<div class="shrow${x.bought?" bought":""}">
+        <div class="shtop"><span class="n">${esc(p.name)}</span><span class="need num">${amtTxt(p,g,true)}</span></div>
+        <div class="h">на 7 дней${unitOf(p)==="pc"?" · "+fmtG(g):p.pieceG&&!NOPC.includes(p.pieceName)?" · ≈ "+pcsTxt(p,g,true):""}</div>
+        <div class="shbot"><span class="flabel">Дома</span>${qtyHtml(p,haveV,`data-id="${esc(id)}"`,"Есть дома, "+p.name)}
+          <span class="pill ${x.cls}" id="sh_${esc(id)}">${x.txt}</span>
+          <button class="chkb${x.bought?" on":""}" data-act="sh_buy" data-id="${esc(id)}" aria-pressed="${!!x.bought}" aria-label="Куплено">✓</button></div></div>`};
+    h+=`<div class="seg seg-s"><button data-act="sh_f" data-v="all" aria-pressed="${shFilter==="all"}">Весь список (${rows.length})</button><button data-act="sh_f" data-v="buy" aria-pressed="${shFilter==="buy"}">Купить (${toBuy.length})</button></div>
+    <section class="card" style="gap:0;padding-block:4px">${list.map(row).join("")||`<div class="empty">${shFilter==="buy"?"Докупать ничего не нужно":"Рацион пуст"}</div>`}</section>
+    <p class="note">Список считается по стандартной неделе рациона и не меняется от правок отдельных дней. Нажмите на «шт» или «г», чтобы сменить единицы.</p>`;
+  } else {
+    const groups={}; ex.forEach(x=>{(groups[x.src||""]=groups[x.src||""]||[]).push(x)});
+    h+=`<div class="grid2"><button class="btn primary block" data-act="shx_add">+ Продукт</button><button class="btn block" data-act="shx_dish"${S.dishes.length?"":" disabled"}>+ Блюдо</button></div>`;
+    h+=Object.entries(groups).map(([src,items])=>`<div class="grp">${src?esc(src):"Свои продукты"}</div><section class="card" style="gap:0;padding-block:4px">${items.map(x=>{const p=P(x.pid);
+      return `<div class="shrow${x.bought?" bought":""}"><div class="shtop"><span class="n">${esc(p.name)}</span><button class="x" data-act="shx_del" data-x="${x.id}" aria-label="Убрать">✕</button></div>
+        <div class="shbot">${qtyHtml(p,inUnit(p,num(x.g)),`data-x="${x.id}"`,"Сколько купить, "+p.name)}${unitOf(p)==="pc"?`<span class="h">${fmtG(num(x.g))}</span>`:""}
+        <button class="chkb${x.bought?" on":""}" data-act="shx_buy" data-x="${x.id}" aria-pressed="${!!x.bought}" aria-label="Куплено">✓</button></div></div>`}).join("")}</section>`).join("")||`<div class="empty card">Сюда добавляются продукты не из рациона: для блюд, гостей, на пробу. Можно добавить готовое блюдо из «Блюд» сразу на нужное число порций.</div>`;
+    if(ex.length) h+=`<div class="grid2"><button class="btn block" data-act="shx_save">Сохранить как набор</button><button class="btn block ghost" data-act="shx_clear">Очистить</button></div>`;
+    if(sh.sets.length) h+=`<div class="grp">Сохранённые наборы</div><section class="card" style="gap:0;padding-block:4px">${sh.sets.map(t=>`<div class="row frow" style="cursor:default"><span class="w"><span class="n">${esc(t.name)}</span><span class="h">${esc(t.items.map(it=>(P(it.pid)?.name||"?").split(" (")[0]).slice(0,4).join(", "))}${t.items.length>4?"…":""}</span></span><button class="btn small" data-act="shx_load" data-t="${t.id}">Добавить</button><button class="x" data-act="shx_sdel" data-t="${t.id}" aria-label="Удалить набор">✕</button></div>`).join("")}</section>`;
+    h+=`<div id="shxMsg"></div>`;
+  }
+  return h;
+}
+function shxAmount(pid){const p=P(pid); ctx={mode:"shopx",pid};
+  openSheet(esc(p.name),`<div class="field"><label for="shxV">Сколько купить${p.pieceG?" ("+esc(unitLbl(p))+")":", г"}</label><input id="shxV" type="number" inputmode="decimal" value="${unitOf(p)==="pc"?1:Math.max(100,r(p.pieceG||0))}"></div><button class="btn primary block" data-act="shx_addok">Добавить в список</button>`);
+  setTimeout(()=>{const i=document.getElementById("shxV"); if(i){i.focus(); i.select()}},50)}
+function shxPush(pid,g,src){const sh=SH(); const ex=sh.extra.find(x=>x.pid===pid&&(x.src||"")===(src||"")&&!x.bought); if(ex) ex.g=num(ex.g)+g; else sh.extra.push({id:uid("x"),pid,g,src:src||""})}
+
+/* ---------- Покупки: события ---------- */
 document.addEventListener("click",e=>{
-  const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act; if(!a.startsWith("sh_")) return;
+  const b=e.target.closest("[data-act]"); if(!b||!S) return; const a=b.dataset.act; if(!a.startsWith("sh_")&&!a.startsWith("shx_")) return; const sh=SH();
+  if(a==="sh_tab"){shTab=b.dataset.v; render(); return}
   if(a==="sh_f"){shFilter=b.dataset.v; render(); return}
-  if(a==="sh_step"){const id=b.dataset.id, p=P(id), pe=(S.pantry||{})[id]||{}, step=p.pieceG?p.pieceG:100; shSet(id,Math.max(0,num(pe.have)+step*(+b.dataset.d))); commit(); return}
-  if(a==="sh_buy"){if(!S.pantry) S.pantry={}; const pe=S.pantry[b.dataset.id]=S.pantry[b.dataset.id]||{}; pe.bought=!pe.bought; commit(); return}
-  if(a==="sh_reset"){document.getElementById("shMsg").innerHTML=`<div class="hint warn">Очистить «есть дома» и отметки «куплено»?</div><button class="btn danger block" data-act="sh_resetok">Да, новая неделя</button>`; return}
-  if(a==="sh_resetok"){S.pantry={}; shFilter="all"; commit(); return}
+  if(a==="sh_unit"){const p=P(b.dataset.pid); sh.unit[p.id]=unitOf(p)==="pc"?"g":"pc"; commit(); return}
+  if(a==="sh_step"){const d=+b.dataset.d;
+    if(b.dataset.x){const x=sh.extra.find(y=>y.id===b.dataset.x); if(!x) return; const p=P(x.pid), st=unitOf(p)==="pc"?p.pieceG:50; x.g=Math.max(0,num(x.g)+st*d); commit(); return}
+    const id=b.dataset.id, p=P(id), st=unitOf(p)==="pc"?p.pieceG:100; sh.have[id]=Math.max(0,num(sh.have[id])+st*d); delete sh.bought[id]; commit(); return}
+  if(a==="sh_buy"){const id=b.dataset.id; if(sh.bought[id]) delete sh.bought[id]; else sh.bought[id]=true; commit(); return}
+  if(a==="sh_reset"){document.getElementById("shMsg").innerHTML=`<div class="hint warn">Начать список на новую неделю? «Есть дома» и «куплено» обнулятся, «Другие блюда» очистятся. Наборы останутся.</div><button class="btn danger block" data-act="sh_resetok">Да, новая неделя</button>`; return}
+  if(a==="sh_resetok"){sh.have={}; sh.bought={}; sh.extra=[]; sh.week=curWeekIso(); shFilter="all"; commit(); return}
+  if(a==="sh_keep"){sh.week=curWeekIso(); commit(); return}
   if(a==="sh_copy"){const need=shopNeed(); const lines=Object.entries(need).filter(([id,g])=>P(id)&&g>0).map(([id,g])=>[id,shopState(id,g)]).filter(([,x])=>x.left>0).map(([id,x])=>"• "+P(id).name.split(" (")[0]+" — "+x.short);
-    const t=lines.length?"Купить:\n"+lines.join("\n"):"Всё есть"; const m=document.getElementById("shMsg");
+    const lx=sh.extra.filter(x=>!x.bought&&P(x.pid)&&num(x.g)>0).map(x=>"• "+P(x.pid).name.split(" (")[0]+" — "+amtTxt(P(x.pid),num(x.g),true)+(x.src?" ("+x.src+")":""));
+    const all=lines.concat(lx); const t=all.length?"Купить:\n"+all.join("\n"):"Всё есть"; const m=document.getElementById("shMsg");
     const show=()=>{m.innerHTML=`<div class="field"><label for="shOut">Выделите и скопируйте</label><textarea id="shOut" rows="5" readonly></textarea></div>`; const ta=document.getElementById("shOut"); ta.value=t; ta.focus(); ta.select()};
     try{navigator.clipboard.writeText(t).then(()=>{m.innerHTML=`<div class="hint">Список скопирован, можно вставить в Заметки или мессенджер.</div>`},show)}catch(x){show()} return}
+  if(a==="shx_add"){sheetPicker("shopx"); return}
+  if(a==="shx_addok"){const p=P(ctx.pid), v=num(document.getElementById("shxV").value); if(v>0) shxPush(p.id,fromUnit(p,v),""); closeSheet(); commit(); return}
+  if(a==="shx_dish"){openSheet("Какое блюдо?",`<div class="field"><label for="shxN">Порций</label><input id="shxN" type="number" inputmode="numeric" value="2"></div><div class="list">${S.dishes.map(d=>`<button class="row" data-act="shx_dishok" data-id="${esc(d.id)}"><span class="w"><span class="n">${esc(d.name)}</span><span class="h">${esc(d.items.map(it=>(P(it.pid)?.name||"?").split(" (")[0]).join(", "))}</span></span><span class="r">+</span></button>`).join("")}</div>`); return}
+  if(a==="shx_dishok"){const d=S.dishes.find(x=>x.id===b.dataset.id), n=Math.max(1,num(document.getElementById("shxN").value)||1); if(!d) return; const src=d.name+" ×"+n;
+    d.items.forEach(it=>{if(P(it.pid)) shxPush(it.pid,num(it.g)*n,src)}); closeSheet(); commit(); return}
+  if(a==="shx_buy"){const x=sh.extra.find(y=>y.id===b.dataset.x); if(x){x.bought=!x.bought; commit()} return}
+  if(a==="shx_del"){sh.extra=sh.extra.filter(y=>y.id!==b.dataset.x); commit(); return}
+  if(a==="shx_clear"){sh.extra=[]; commit(); return}
+  if(a==="shx_save"){openSheet("Сохранить набор",`<div class="field"><label for="shxName">Название</label><input id="shxName" placeholder="Например: Гости в субботу"></div><button class="btn primary block" data-act="shx_saveok">Сохранить</button>`); return}
+  if(a==="shx_saveok"){const nm=(document.getElementById("shxName").value||"").trim()||"Набор "+(sh.sets.length+1); sh.sets.push({id:uid("s"),name:nm,items:sh.extra.map(x=>({pid:x.pid,g:num(x.g),src:x.src||""}))}); closeSheet(); commit(); return}
+  if(a==="shx_load"){const t=sh.sets.find(x=>x.id===b.dataset.t); if(t){t.items.forEach(it=>{if(P(it.pid)) shxPush(it.pid,it.g,it.src||t.name)}); commit()} return}
+  if(a==="shx_sdel"){sh.sets=sh.sets.filter(x=>x.id!==b.dataset.t); commit(); return}
 });
-document.addEventListener("input",e=>{const t=e.target; if(!t.dataset||!t.dataset.sh||!S) return; const id=t.dataset.sh, p=P(id); const v=num(t.value);
-  if(t.value===""){if(S.pantry&&S.pantry[id]) {S.pantry[id].have=""; S.pantry[id].bought=false}} else shSet(id,v);
-  const hh=document.getElementById("shh_"+id); if(hh&&p.pieceG) hh.textContent=v>0?"дома ≈ "+pcsTxt(p,v):"1 "+(p.pieceName||"шт")+" = "+fmtW(p.pieceG)+" г";
-  commit(false); shRefresh(id)});
+document.addEventListener("input",e=>{const t=e.target; if(!S||!t.dataset||!(t.dataset.qid||t.dataset.qx)) return; const sh=SH(), v=num(t.value);
+  if(t.dataset.qx){const x=sh.extra.find(y=>y.id===t.dataset.qx); if(!x) return; x.g=fromUnit(P(x.pid),v); commit(false); return}
+  const id=t.dataset.qid, p=P(id);
+  if(t.value==="") delete sh.have[id]; else sh.have[id]=fromUnit(p,v); delete sh.bought[id];
+  commit(false); const need=shopNeed()[id]||0, x=shopState(id,need), el=document.getElementById("sh_"+id); if(el){el.className="pill "+x.cls; el.textContent=x.txt}});
+
 
 
 
@@ -2647,6 +2703,14 @@ document.addEventListener("click",e=>{
   if(a==="cal_day"){sheetCalDay(b.dataset.d); return}
 });
 
+
+/* ---------- Восстановление исходной программы ---------- */
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act]"); if(!b||!S) return; const a=b.dataset.act;
+  if(a==="t_reset"){openSheet("Восстановить программу?",`<div class="note">Тренировки 1–4 вернутся к исходным упражнениям, подходам и повторам. Удалённые тренировки появятся снова.</div><div class="hint">История тренировок, веса и рекорды <b>не удалятся</b>. Ваши новые тренировки и расписание недели тоже останутся.</div><button class="btn primary block" data-act="t_resetok">Восстановить</button>`); return}
+  if(a==="t_resetok"){const T=TR(), D=defaultTrain().days, ids=new Set(D.map(x=>x.id));
+    T.days=D.concat(T.days.filter(x=>!ids.has(x.id))); editDay=null; closeSheet(); commit(); return}
+  if(a==="t_dreset"){const def=defaultTrain().days.find(x=>x.id===editDay.id); if(!def) return; editDay.ex=clone(def.ex); editDay.name=def.name; editDay.focus=def.focus; render(); return}
+});
 /* ---------- События ---------- */
 document.addEventListener("click",e=>{
   const b=e.target.closest("[data-act]"); if(!b) return;
@@ -2663,7 +2727,7 @@ document.addEventListener("click",e=>{
   if(a==="scope"){ctx.scope=b.dataset.v; if(ctx.sheet==="opts") sheetOptions(ctx.pid); else {const g=document.getElementById("gIn"); const keep=g?g.value:null; sheetItem(); if(keep!=null) {gIn.value=keep; liveItem()}} return}
   if(a==="swap"){sheetPicker("swap"); return}
   if(a==="add"){ctx={s:+b.dataset.s}; sheetPicker("add"); return}
-  if(a==="pick"){if(ctx.mode==="extra"){ctx.pid=b.dataset.id; ctx.g=0; sheetExtraAmount(); return} if(ctx.mode==="day") startDayAdd(b.dataset.id); else if(ctx.mode==="dish"){editDish.items.push({pid:b.dataset.id,g:100}); closeSheet(); render()} else sheetOptions(b.dataset.id); return}
+  if(a==="pick"){if(ctx.mode==="shopx"){shxAmount(b.dataset.id); return} if(ctx.mode==="extra"){ctx.pid=b.dataset.id; ctx.g=0; sheetExtraAmount(); return} if(ctx.mode==="day") startDayAdd(b.dataset.id); else if(ctx.mode==="dish"){editDish.items.push({pid:b.dataset.id,g:100}); closeSheet(); render()} else sheetOptions(b.dataset.id); return}
   if(a==="dnew"){editDish={isNew:true,id:"d"+Date.now().toString(36),name:"",items:[]}; dfit={si:slotGuess(),mode:"side",d:null}; render(); window.scrollTo(0,0); return}
   if(a==="dedit"){const ds=S.dishes.find(x=>x.id===b.dataset.id); if(ds){editDish=clone(ds); dfit={si:slotGuess(),mode:"side",d:null}; render(); window.scrollTo(0,0)} return}
   if(a==="dback"){editDish=null; render(); return}
