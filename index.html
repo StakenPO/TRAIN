@@ -555,6 +555,35 @@ body.notabs .restbar{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
 .tp-f{display:flex;justify-content:flex-end;padding:8px 14px 14px}
 .tagp{font-size:10.5px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:6px;vertical-align:2px;white-space:nowrap}
 .tlist{display:flex;flex-direction:column;gap:10px}
+/* v4: календарь, выбор тренировки */
+.wdc,.tpc{display:flex;gap:6px;flex-wrap:wrap}
+.wdc button,.tpc button{appearance:none;border:0;background:var(--raise);color:var(--ink);font:inherit;font-size:14px;font-weight:700;border-radius:12px;padding:9px 0;flex:1 1 0;min-width:38px;cursor:pointer}
+.tpc button{padding:9px 14px;flex:0 1 auto}
+.wdc button[aria-pressed="true"],.tpc button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.lnk{appearance:none;border:0;background:none;color:var(--accent);font:inherit;font-size:13.5px;font-weight:600;padding:2px 0;align-self:flex-start;cursor:pointer}
+.cal-h{display:flex;align-items:center;justify-content:space-between}.cal-h b{font-size:16px}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cw{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding-bottom:2px}
+.cd{appearance:none;border:0;background:transparent;font:inherit;color:var(--ink);aspect-ratio:1;border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;padding:0;min-width:0}
+.cd.empty{pointer-events:none}
+.cd .cn{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+.cd.inp{background:var(--raise)}
+.cd.fut .cn{opacity:.5}
+.cd.today{box-shadow:inset 0 0 0 2px var(--ink)}
+.cd.s-ok{background:var(--ok-soft)}.cd.s-ok .cn{color:var(--ok)}
+.cd.s-over{background:var(--bad-soft)}.cd.s-over .cn{color:var(--bad)}
+.cd.s-under,.cd.s-part{background:var(--warn-soft)}.cd.s-under .cn,.cd.s-part .cn{color:var(--warn)}
+.cdots{display:flex;gap:3px;height:5px}
+.dt{display:inline-block;width:5px;height:5px;border-radius:50%}
+.dt.t{background:var(--accent)}.dt.w{background:var(--ink);opacity:.5}
+.cal-lg{flex-wrap:wrap;gap:8px 14px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:3px}
+.sw.ok{background:var(--ok)}.sw.over{background:var(--bad)}.sw.under{background:var(--warn)}
+.wk-s{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.wk-s>div{background:var(--raise);border-radius:12px;padding:9px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.wk-s .num{font-size:18px;font-weight:700}.wk-s small{font-size:11px;color:var(--muted)}
+.card.wk.cur{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.card.slab input[type=date]{color-scheme:dark}
 </style>
 <style>
 html,body{margin:0}
@@ -724,6 +753,9 @@ function fix(s){ // защитить от неполных или старых �
   if(!s.extras||typeof s.extras!=="object") s.extras={};
   if(!Array.isArray(s.weights)){s.weights=[]; ((s.body||{}).entries||[]).forEach(e=>{if(num(e.weight)&&!s.weights.find(x=>x.date===e.date)) s.weights.push({date:e.date,w:num(e.weight)})})}
   if(!s.planGoal) s.planGoal=s.profile.goal||"cut";
+  if(!s.dayLog||typeof s.dayLog!=="object") s.dayLog={};
+  if(!s.train.pick||typeof s.train.pick!=="object") s.train.pick={};
+  if(s.program===undefined) s.program=null;
   if(!Array.isArray(s.baseSchedule)||s.baseSchedule.length!==7) s.baseSchedule=clone(d.schedule);
   s.v=1; return s;
 }
@@ -749,7 +781,7 @@ function syncHtml(){
     local:["","Сохранено на этом устройстве"]}[syncState]||["",""];
   return `<span class="sync ${m[0]}" id="sync"><i></i>${m[1]}</span>`;
 }
-function commit(rerender=true){ROOT.updatedAt=Date.now(); saveLocal(); if(rerender) render(); clearTimeout(timer); timer=setTimeout(flush,700)}
+function commit(rerender=true){ROOT.updatedAt=Date.now(); snapToday(); saveLocal(); if(rerender) render(); clearTimeout(timer); timer=setTimeout(flush,700)}
 async function flush(){
   if(!dbRef) return; if(saving){again=true;return}
   if(navigator.onLine===false){setSync("offline"); return}
@@ -816,7 +848,7 @@ function render(){
   renderTabs();
   const v=document.getElementById("view");
   const body = tab==="day"?viewDay():tab==="dishes"?viewDishes():tab==="products"?viewProducts():tab==="shop"?viewShop()
-    :tab==="workout"?viewWorkout():tab==="program"?viewProgram():tab==="history"?viewHistory():tab==="today"?viewToday():tab==="photos"?viewPhotos():tab==="weight"?viewWeight():tab==="compare"?viewCompare():viewGoal();
+    :tab==="workout"?viewWorkout():tab==="program"?viewProgram():tab==="history"?viewHistory():tab==="today"?viewToday():tab==="calendar"?viewCalendar():tab==="photos"?viewPhotos():tab==="weight"?viewWeight():tab==="compare"?viewCompare():viewGoal();
   v.innerHTML = modeSwitch()+body;
   renderRest();
   hydratePhotos(v);
@@ -1557,10 +1589,11 @@ const ICON={
   history:'<path d="M4 19h16"/><path d="M6 15l4-5 3 3 5-7"/>',
   weight:'<path d="M5 20h14l-1.5-11h-11z"/><path d="M9 9a3 3 0 0 1 6 0"/><path d="M12 13l1.5-2"/>',
   photos:'<rect x="3" y="6" width="18" height="14" rx="3"/><path d="M8 6l1.5-2h5L16 6"/><circle cx="12" cy="13" r="3.5"/>',
+  calendar:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
   compare:'<rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="4" width="8" height="16" rx="2"/>'
 };
-const TABS={today:[],body:[["photos","Фото"],["weight","Вес"],["compare","Сравнение"],["goal","Аккаунт"]],food:[["day","Рацион"],["dishes","Блюда"],["products","Продукты"],["shop","Покупки"],["goal","Аккаунт"]],
-  train:[["workout","Тренировка"],["program","Программа"],["history","Прогресс"],["goal","Аккаунт"]]};
+const TABS={today:[],body:[["calendar","Календарь"],["photos","Фото"],["weight","Вес"],["compare","Сравнение"],["goal","Аккаунт"]],food:[["day","Рацион"],["dishes","Блюда"],["products","Продукты"],["shop","Покупки"],["goal","Аккаунт"]],
+  train:[["workout","Тренировка"],["program","Программа"],["history","История"],["goal","Аккаунт"]]};
 function renderTabs(){
   const el=document.getElementById("tabsIn"); if(!el) return; const list=TABS[mode]||[];
   el.closest(".tabs").hidden=!list.length; document.body.classList.toggle("notabs",!list.length);
@@ -1569,7 +1602,7 @@ function renderTabs(){
 }
 function modeSwitch(){
   const a=TR().active;
-  return `<div class="modesw" role="tablist" aria-label="Раздел"><button data-act="mode" data-v="today" aria-pressed="${mode==="today"}">Сегодня</button><button data-act="mode" data-v="food" aria-pressed="${mode==="food"}">Питание</button><button data-act="mode" data-v="train" aria-pressed="${mode==="train"}">Тренировки${a&&mode!=="train"?" •":""}</button><button data-act="mode" data-v="body" aria-pressed="${mode==="body"}">Форма</button></div>`;
+  return `<div class="modesw" role="tablist" aria-label="Раздел"><button data-act="mode" data-v="today" aria-pressed="${mode==="today"}">Сегодня</button><button data-act="mode" data-v="food" aria-pressed="${mode==="food"}">Питание</button><button data-act="mode" data-v="train" aria-pressed="${mode==="train"}">Тренировки${a&&mode!=="train"?" •":""}</button><button data-act="mode" data-v="body" aria-pressed="${mode==="body"}">Прогресс</button></div>`;
 }
 
 /* ---------- Таймер отдыха ---------- */
@@ -1604,7 +1637,7 @@ document.addEventListener("visibilitychange",()=>{if(!document.hidden) tick()});
 let openTr=null;
 function lastDoneTxt(id){const T=TR(); for(let i=T.sessions.length-1;i>=0;i--) if(T.sessions[i].dayId===id) return new Date(T.sessions[i].start).toLocaleDateString("ru-RU",{day:"numeric",month:"short"}); return null}
 function trainingList(){
-  const T=TR(), planId=T.week[todayIdx];
+  const T=TR(), planId=effWeek()[todayIdx];
   return T.days.map(d=>{const open=openTr===d.id, ld=lastDoneTxt(d.id);
     return `<article class="tpick${open?" open":""}">
       <button class="tp-h" data-act="t_toggle" data-id="${d.id}" aria-expanded="${open}"><span class="w"><span class="tp-n">${esc(d.name)}${d.id===planId?` <span class="tagp">по плану сегодня</span>`:""}</span><span class="h">${esc(d.focus||"")} · ${d.ex.length} упр.${ld?" · был "+ld:""}</span></span><span class="tp-chev" aria-hidden="true">›</span></button>
@@ -1748,12 +1781,12 @@ function finishSummary(s,prs){
 document.addEventListener("click",e=>{
   unlockAudio();
   const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act;
-  if(a==="mode"){mode=b.dataset.v; try{localStorage.setItem("ration_mode",mode)}catch(x){} tab=mode==="train"?"workout":mode==="body"?"photos":mode==="today"?"today":"day"; editDay=null; render(); window.scrollTo(0,0); return}
+  if(a==="mode"){mode=b.dataset.v; try{localStorage.setItem("ration_mode",mode)}catch(x){} tab=mode==="train"?"workout":mode==="body"?"calendar":mode==="today"?"today":"day"; editDay=null; render(); window.scrollTo(0,0); return}
   if(!a.startsWith("t_")) return;
   const T=TR(), A=T.active;
   if(a==="t_start"){if(A){openSheet("Уже идёт тренировка",`<div class="note">Сейчас идёт «${esc(A.name)}». Сначала завершите или отмените её.</div><button class="btn primary block" data-act="t_goactive">Открыть текущую</button>`); return} closeSheet(); startSession(b.dataset.id); return}
   if(a==="t_toggle"){openTr=openTr===b.dataset.id?null:b.dataset.id; render(); return}
-  if(a==="t_pick"){openSheet("Какую тренировку делаем?",`<div class="tlist">${T.days.map(d=>`<button class="opt" data-act="t_start" data-id="${d.id}"><span class="top"><span class="ttl">${esc(d.name)}${d.id===T.week[todayIdx]?` <span class="tagp">по плану</span>`:""}</span><span class="res">${d.ex.length} упр.</span></span><span class="ing">${esc(d.focus||"")}</span>${lastDoneTxt(d.id)?`<span class="res">Последний раз: ${lastDoneTxt(d.id)}</span>`:""}</button>`).join("")}</div>`); return}
+  if(a==="t_pick"){openSheet("Какую тренировку делаем?",`<div class="tlist">${T.days.map(d=>`<button class="opt" data-act="t_start" data-id="${d.id}"><span class="top"><span class="ttl">${esc(d.name)}${d.id===effWeek()[todayIdx]?` <span class="tagp">сегодня</span>`:""}</span><span class="res">${d.ex.length} упр.</span></span><span class="ing">${esc(d.focus||"")}</span>${lastDoneTxt(d.id)?`<span class="res">Последний раз: ${lastDoneTxt(d.id)}</span>`:""}</button>`).join("")}</div>`); return}
   if(a==="t_goactive"){closeSheet(); mode="train"; tab="workout"; render(); return}
   if(a==="t_done"){const ex=A.ex[+b.dataset.e], st=ex.sets[+b.dataset.s]; st.done=!st.done;
     if(st.done){const si=+b.dataset.s, prev=ex.sets.slice(0,si).reverse().find(x=>x.done); if(st.w==="") st.w=st.pw||(prev?String(prev.w):"0"); if(st.reps==="") st.reps=st.pr||(prev?String(prev.reps):"0"); ex.sets.slice(si+1).forEach(x=>{if(!x.done){x.pw=String(st.w); if(!x.pr) x.pr=String(st.reps)}}); const isLast=ex.sets.every(x=>x.done)&&A.ex.indexOf(ex)===A.ex.length-1; if(!isLast) startRest(ex.rest||90,ex.name)}
@@ -2130,7 +2163,7 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]"); if
 /* ==================== УГЛЕВОДЫ ПО ДНЯМ ТРЕНИРОВОК ==================== */
 function cycleDelta(d){
   const on=num(S.profile.cycle)||0; if(!on||!S.train) return 0;
-  const w=S.train.week||[], nT=w.filter(Boolean).length, nR=7-nT; if(!nT||!nR) return 0;
+  const w=effWeek(), nT=w.filter(Boolean).length, nR=7-nT; if(!nT||!nR) return 0;
   return w[d]?on:-on*nT/nR;
 }
 function dayTarget(d){const T=targets(), x=cycleDelta(d); if(!x) return T; return Object.assign({},T,{kcal:T.kcal+x,c:Math.max(0,T.c+x/4)})}
@@ -2144,7 +2177,7 @@ function removeCycle(){
   });
 }
 function applyCycle(){
-  removeCycle();
+  removeCycle(); S.cycleSig=cycleSig();
   if(!num(S.profile.cycle)) return;
   for(let d=0;d<7;d++){
     const delta=cycleDelta(d); if(!delta) continue;
@@ -2160,12 +2193,13 @@ function applyCycle(){
   }
 }
 function cycleCard(){
-  const p=S.profile, w=(S.train&&S.train.week)||[], tdays=WD.filter((_,i)=>w[i]), on=num(p.cycle)||0;
+  const p=S.profile, w=(S.train&&S.train.week)||[]
+  , wdc=`<span class="flabel">Дни тренировок</span><div class="wdc">${WD.map((x,i)=>`<button data-act="twd" data-i="${i}" aria-pressed="${!!w[i]}">${x}</button>`).join("")}</div>`, tdays=WD.filter((_,i)=>w[i]), on=num(p.cycle)||0;
   const nT=tdays.length, nR=7-nT;
-  return `<span class="flabel">Углеводы по дням тренировок</span>
+  return wdc+`<span class="flabel">Углеводы по дням тренировок</span>
     <div class="seg">${[["0","Выкл"],["150","±150 ккал"],["250","±250 ккал"]].map(([v,l])=>`<button data-act="cyc" data-v="${v}" aria-pressed="${String(on)===v}">${l}</button>`).join("")}</div>
     ${on?(nT&&nR?`<div class="note">Тренировки: <b>${tdays.join(", ")}</b> (+${on} ккал, больше крупы). Отдых: ${WD.filter((_,i)=>!w[i]).join(", ")} (−${Math.round(on*nT/nR)} ккал). За неделю калории те же.</div>`
-      :`<div class="hint warn">Отметьте дни тренировок во вкладке «Тренировки → Программа → Неделя».</div>`):""}`;
+      :`<div class="hint warn">Отметьте дни тренировок выше.</div>`):""}`;
 }
 
 /* ==================== СКАНЕР ШТРИХКОДА ==================== */
@@ -2397,15 +2431,18 @@ function viewToday(){
       ${ex.map(x=>`<div class="row frow"><span class="w"><span class="n">${esc(x.name)} <span class="tagx">вне</span></span><span class="h">${x.g?r(x.g)+" г · ":""}Б ${r(x.p)} Ж ${r(x.f)} У ${r(x.c)}</span></span><span class="r num">${r(x.kcal)} ккал</span><button class="x" data-act="x_del" data-id="${x.id}" aria-label="Удалить">✕</button></div>`).join("")}</section>`;
   }
 
-  const Tr=TR(), a=Tr.active, sesToday=Tr.sessions.filter(s=>s.date===dateKey), planId=Tr.week[d], pd=planId?dayById(planId):null;
+  const Tr=TR(), a=Tr.active, sesToday=Tr.sessions.filter(s=>s.date===dateKey), planId=effWeek()[d], pd=planId?dayById(planId):null, pk=pickToday(), basePlan=Tr.week[d];
   h+=`<div class="grp">Тренировка</div>`;
   if(a){const total=a.ex.reduce((x,e)=>x+e.sets.length,0), dn=sessSets(a);
     h+=`<section class="card slab tcard"><div class="kpi"><div><span class="dh-lbl">Идёт сейчас</span><div class="nm-t">${esc(a.name)}</div></div><span class="pill neutral">${dn} / ${total}</span></div><div class="bar"><i style="width:${total?dn/total*100:0}%"></i></div><button class="btn primary block" data-act="td_go" data-m="train" data-t="workout">Продолжить</button></section>`;
   } else if(sesToday.length){const s=sesToday[sesToday.length-1];
     h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${esc(s.name)} ✓</div><div class="sub" style="display:block">${fmtDur((s.end||s.start)-s.start)} · ${sessSets(s)} подходов · ${Math.round(sessVolume(s))} кг объём</div></div><span class="pill ok">сделано</span></div></section>`;
   } else {
-    h+=`<section class="card tcard"><div class="kpi"><div><div class="nm-t">${pd?"По плану: "+esc(pd.name):"По плану отдых"}</div><div class="sub" style="display:block">${pd?esc(pd.focus||""):"Можно выбрать любую тренировку"}</div></div></div>
-      <button class="btn ${pd?"":"primary "}block" data-act="t_pick">Выбрать тренировку</button>${pd?`<button class="btn primary block" data-act="t_start" data-id="${pd.id}">Начать «${esc(pd.name)}»</button>`:""}</section>`;
+    const chip=(v,l,on)=>`<button data-act="tp_pick" data-v="${v}" aria-pressed="${on}">${l}</button>`;
+    h+=`<section class="card tcard"><div class="kpi"><div><span class="dh-lbl" style="color:var(--muted)">${pk!==undefined?"Выбрано на сегодня":"По плану"}</span><div class="nm-t">${pd?esc(pd.name):"Отдых"}</div><div class="sub" style="display:block">${pd?esc(pd.focus||"")+" · "+pd.ex.length+" упр.":"Восстановление"}${num(S.profile.cycle)?(pd?" · углеводов больше":" · углеводов меньше"):""}</div></div></div>
+      <div class="tpc">${Tr.days.map(x=>chip(x.id,esc(x.name.replace(/^Тренировка\s*/i,"Т")),!!pd&&pd.id===x.id)).join("")}${chip("rest","Отдых",!pd)}</div>
+      ${pk!==undefined?`<button class="lnk" data-act="tp_pick" data-v="plan">Вернуть по плану (${basePlan&&dayById(basePlan)?esc(dayById(basePlan).name):"отдых"})</button>`:""}
+      ${pd?`<button class="btn primary block" data-act="t_start" data-id="${pd.id}">Начать «${esc(pd.name)}»</button>`:""}</section>`;
   }
 
   const ws=weightsAsc(), ser=trendSeries(ws), lw=ser[ser.length-1], R=weeklyRate(ser);
@@ -2490,6 +2527,125 @@ async function photosForExport(){
 async function photosImport(map){
   for(const [id,du] of Object.entries(map||{})){try{const [h,d]=String(du).split(","); const mime=(h.match(/data:([^;]+)/)||[])[1]||"image/jpeg"; const bin=atob(d); const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); await PDB.put(id,new Blob([arr],{type:mime})); delete purl[id]}catch(e){}}
 }
+
+/* ==================== ТРЕНИРОВКА ДНЯ: ВЫБОР ПОЛЬЗОВАТЕЛЯ ==================== */
+function pickToday(){return ((S.train||{}).pick||{})[dateKey]}
+function effWeek(){const w=((S.train||{}).week||[]).slice(); const pk=pickToday(); if(pk!==undefined) w[todayIdx]=pk==="rest"?null:pk; return w}
+function todayTraining(){const id=effWeek()[todayIdx]; return id?dayById(id):null}
+function cycleSig(){return JSON.stringify(effWeek())+"|"+(S.profile.cycle||0)}
+function syncCycle(){ if(num(S.profile.cycle)&&S.cycleSig!==cycleSig()){applyCycle(); S.cycleSig=cycleSig(); return true} return false }
+function setTrainingDay(i,on){
+  const T=TR(); if(!on){T.week[i]=null; return}
+  const used=new Set(T.week.filter(Boolean)); const free=T.days.find(d=>!used.has(d.id)); T.week[i]=(free||T.days[0]||{}).id||null;
+}
+
+/* ==================== ЖУРНАЛ ДНЕЙ (ФАКТ) ==================== */
+function snapToday(){
+  if(!S||!S.slots) return;
+  try{
+    ensureToday(); const n=S.eaten.done.length, ex=extrasToday().length; S.dayLog=S.dayLog||{};
+    if(!n&&!ex){delete S.dayLog[isoToday()]; return}
+    const f=factToday(), T=dayTarget(todayIdx);
+    S.dayLog[isoToday()]={k:r(f[0]),p:r(f[1]),f:r(f[2]),c:r(f[3]),tk:r(T.kcal),tp:r(T.p),n,of:S.slots.length,ex};
+  }catch(e){}
+}
+const isoOf=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+function dayStatus(iso){
+  const L=(S.dayLog||{})[iso==="today"?isoToday():iso]; if(!L) return null;
+  const q=L.tk?L.k/L.tk:0;
+  if(q>1.05) return {cls:"over",txt:"перебор"};
+  if(q>=0.95) return {cls:"ok",txt:"в цели"};
+  if(L.n>=L.of) return {cls:"under",txt:"недобор"};
+  return {cls:"part",txt:"частично"};
+}
+function sessionsOn(iso){return ((S.train||{}).sessions||[]).filter(s=>{const d=new Date(s.start); return isoOf(d)===iso})}
+function weightOn(iso){return (S.weights||[]).find(w=>w.date===iso)}
+function trendAt(iso){const ser=trendSeries(weightsAsc()), t=pDate(iso).getTime()+864e5-1; let v=null; ser.forEach(p=>{if(p.t<=t) v=p.tr}); return v}
+
+/* ==================== ПРОГРАММА И КАЛЕНДАРЬ ==================== */
+let calMonth=null;
+function progInfo(){
+  const P=S.program; if(!P) return null;
+  const s=pDate(P.start), e=P.end?pDate(P.end):null, today=pDate(isoToday());
+  const day=Math.floor((today-s)/864e5)+1, total=e?Math.floor((e-s)/864e5)+1:null;
+  return {s,e,day,total,week:Math.ceil(Math.max(1,day)/7),weeks:total?Math.ceil(total/7):null,left:e?Math.max(0,Math.floor((e-today)/864e5)):null};
+}
+function viewCalendar(){
+  snapToday();
+  const P=S.program, I=progInfo();
+  let h=`<header class="toprow"><div><div class="eyebrow">Программа</div><h1>${P?esc(GOALS[P.goal]||"Программа"):"Календарь"}</h1></div>${syncHtml()}</header>`;
+  if(!P){
+    h+=`<section class="card slab"><div class="nm-t" style="color:var(--slab-ink)">Начните программу</div><div class="note">Отметьте день старта, и приложение будет вести календарь: питание по дням, тренировки, вес и итоги каждой недели.</div>
+      <div class="field"><label for="prStart" style="color:var(--slab-muted)">Старт</label><input id="prStart" type="date" value="${isoToday()}"></div>
+      <span class="flabel" style="color:var(--slab-muted)">Длительность</span>
+      <div class="seg">${[["8","8 недель"],["12","12 недель"],["16","16 недель"],["0","Без срока"]].map(([v,l])=>`<button data-act="pr_len" data-v="${v}" aria-pressed="${v==="12"}">${l}</button>`).join("")}</div>
+      <button class="btn primary block" data-act="pr_start">Начать: ${esc(GOALS[S.profile.goal]||"")}</button></section>`;
+    ctx.prLen=12;
+  } else {
+    const pct=I.total?Math.min(100,Math.max(0,I.day/I.total*100)):0;
+    h+=`<section class="card slab"><div class="kpi"><div><span class="num big">${I.day>0?"День "+I.day:"Скоро старт"}</span> <span class="of">${I.total?"из "+I.total:""}</span></div><span class="pill neutral">неделя ${I.week}${I.weeks?" из "+I.weeks:""}</span></div>
+      ${I.total?`<div class="bar"><i style="width:${pct}%"></i></div>`:""}
+      <div class="note">${fmtDate(P.start,false)} → ${P.end?fmtDate(P.end,false)+(I.left!=null?" · осталось "+I.left+" дн.":""):"без срока"}</div>
+      <button class="btn small ghost" data-act="pr_edit" style="align-self:flex-start;color:var(--slab-muted)">Изменить программу</button></section>`;
+  }
+  // Календарь месяца
+  const base=calMonth||(()=>{const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),1)})(); calMonth=base;
+  const first=new Date(base.getFullYear(),base.getMonth(),1), startOff=(first.getDay()+6)%7, days=new Date(base.getFullYear(),base.getMonth()+1,0).getDate();
+  const tIso=isoToday(), ps=P?P.start:null, pe=P&&P.end?P.end:null;
+  let cells=""; for(let i=0;i<startOff;i++) cells+=`<span class="cd empty"></span>`;
+  for(let dd=1;dd<=days;dd++){
+    const d=new Date(base.getFullYear(),base.getMonth(),dd), iso=isoOf(d), st=dayStatus(iso), tr=sessionsOn(iso).length, w=weightOn(iso);
+    const inP=ps&&iso>=ps&&(!pe||iso<=pe), fut=iso>tIso;
+    cells+=`<button class="cd${iso===tIso?" today":""}${inP?" inp":""}${fut?" fut":""}${st?" s-"+st.cls:""}" data-act="cal_day" data-d="${iso}" aria-label="${fmtDate(iso)}${st?", питание: "+st.txt:""}${tr?", тренировка":""}${w?", вес "+fmtW(w.w):""}">
+      <span class="cn">${dd}</span><span class="cdots">${tr?`<i class="dt t"></i>`:""}${w?`<i class="dt w"></i>`:""}</span></button>`;
+  }
+  h+=`<section class="card cal"><div class="cal-h"><button class="x" data-act="cal_nav" data-v="-1" aria-label="Предыдущий месяц">‹</button><b>${MONTHS_N[base.getMonth()]} ${base.getFullYear()}</b><button class="x" data-act="cal_nav" data-v="1" aria-label="Следующий месяц">›</button></div>
+    <div class="cal-g">${WD.map(w=>`<span class="cw">${w}</span>`).join("")}${cells}</div>
+    <div class="legend cal-lg"><span><i class="sw ok"></i>в цели</span><span><i class="sw over"></i>перебор</span><span><i class="sw under"></i>недобор</span><span><i class="dt t"></i>тренировка</span><span><i class="dt w"></i>вес</span></div></section>`;
+  // Итоги недель
+  if(P&&I.day>0){
+    const wk=[]; for(let i=0;i<Math.min(I.week,(I.weeks||I.week));i++){
+      const s=pDate(P.start); s.setDate(s.getDate()+i*7); const e=new Date(s); e.setDate(e.getDate()+6);
+      const isos=[]; for(let k=0;k<7;k++){const x=new Date(s); x.setDate(x.getDate()+k); isos.push(isoOf(x))}
+      const logs=isos.map(x=>(S.dayLog||{})[x]).filter(Boolean), stats=isos.map(dayStatus).filter(Boolean);
+      const okN=stats.filter(x=>x.cls==="ok").length, avgK=logs.length?logs.reduce((a,L)=>a+L.k,0)/logs.length:null;
+      const trN=isos.reduce((a,x)=>a+sessionsOn(x).length,0), plN=effWeek().filter(Boolean).length;
+      const prevIso=isoOf(new Date(s.getTime()-864e5)), w0=trendAt(prevIso)??trendAt(isos[0]), w1=trendAt(isos[6]);
+      wk.push({i,s,e,okN,logged:logs.length,avgK,trN,plN,dw:w0!=null&&w1!=null?w1-w0:null,cur:i===I.week-1});
+    }
+    h+=`<div class="grp">Недели</div>`+wk.reverse().map(x=>`<section class="card wk${x.cur?" cur":""}"><div class="kpi"><div><div class="nm-t" style="font-size:17px">Неделя ${x.i+1}${x.cur?` <span class="tagp">сейчас</span>`:""}</div><div class="sub" style="display:block">${x.s.getDate()} ${MONTHS[x.s.getMonth()]} – ${x.e.getDate()} ${MONTHS[x.e.getMonth()]}</div></div>${x.dw!=null?`<span class="pill ${(S.program.goal==="bulk"?x.dw>=0:x.dw<=0)?"ok":"warn"}">${signed(x.dw,"кг")}</span>`:""}</div>
+      <div class="wk-s"><div><span class="num">${x.okN}/${x.logged||0}</span><small>дней в цели</small></div><div><span class="num">${x.avgK!=null?r(x.avgK):"–"}</span><small>ккал в среднем</small></div><div><span class="num">${x.trN}/${x.plN}</span><small>тренировок</small></div></div></section>`).join("");
+  }
+  h+=`<p class="note">День засчитывается, когда вы отмечаете приёмы «Съел» и записываете «вне плана». Цвет дня: зелёный — в цели (±5%), красный — перебор, жёлтый — недобор.</p>`;
+  return h;
+}
+function sheetCalDay(iso){
+  const L=(S.dayLog||{})[iso], st=dayStatus(iso), ss=sessionsOn(iso), w=weightOn(iso), ex=(S.extras||{})[iso.split("-").map(Number).join("-")]||[];
+  openSheet(fmtDate(iso),`
+    ${L?`<div class="stats"><div class="stat ${st&&st.cls==="ok"?"hl":""}"><div class="l">Съедено</div><div class="v num">${L.k} <small style="font-size:12px">/ ${L.tk}</small></div></div><div class="stat"><div class="l">Белок</div><div class="v num">${L.p} <small style="font-size:12px">/ ${L.tp||"–"} г</small></div></div></div>
+      <div class="note">Отмечено приёмов: ${L.n} из ${L.of}${L.ex?" · вне плана: "+L.ex:""}. ${st?"Итог: <b>"+st.txt+"</b>.":""}</div>`:`<div class="hint">Питание в этот день не отмечено.</div>`}
+    ${ex.length?`<div class="list">${ex.map(x=>`<div class="row" style="cursor:default;padding:8px 0"><span class="w"><span class="n" style="font-weight:600">${esc(x.name)}</span></span><span class="r num">${r(x.kcal)} ккал</span></div>`).join("")}</div>`:""}
+    ${ss.length?ss.map(s=>`<div class="hint"><b>${esc(s.name)}</b> · ${fmtDur((s.end||s.start)-s.start)} · ${sessSets(s)} подходов</div>`).join(""):`<div class="note">Тренировки не было.</div>`}
+    ${w?`<div class="note">Вес: <b class="num">${fmtW(w.w)} кг</b></div>`:""}`);
+}
+
+/* ==================== СОБЫТИЯ ==================== */
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b||!S) return; const a=b.dataset.act;
+  if(a==="tp_pick"){S.train.pick=S.train.pick||{}; const v=b.dataset.v; if(v==="plan") delete S.train.pick[dateKey]; else S.train.pick[dateKey]=v;
+    Object.keys(S.train.pick).forEach(k=>{if(k!==dateKey) delete S.train.pick[k]}); syncCycle(); commit(); return}
+  if(a==="twd"){const i=+b.dataset.i; setTrainingDay(i,!TR().week[i]); syncCycle(); commit(); return}
+  if(a==="pr_len"){ctx.prLen=+b.dataset.v; document.querySelectorAll('[data-act="pr_len"]').forEach(x=>x.setAttribute("aria-pressed",String(x===b))); return}
+  if(a==="pr_start"){const st=document.getElementById("prStart").value||isoToday(), n=ctx.prLen??12; let end=null; if(n){const d=pDate(st); d.setDate(d.getDate()+n*7-1); end=isoOf(d)}
+    S.program={start:st,end,goal:S.profile.goal}; commit(); return}
+  if(a==="pr_edit"){const P=S.program; openSheet("Программа",`<div class="field"><label for="prS">Старт</label><input id="prS" type="date" value="${P.start}"></div><div class="field"><label for="prE">Окончание (можно пусто)</label><input id="prE" type="date" value="${P.end||""}"></div>
+      <button class="btn primary block" data-act="pr_save">Сохранить</button><button class="btn danger block" data-act="pr_end">Завершить программу</button><div id="prMsg"></div>`); return}
+  if(a==="pr_save"){S.program.start=document.getElementById("prS").value||S.program.start; S.program.end=document.getElementById("prE").value||null; closeSheet(); commit(); return}
+  if(a==="pr_end"){document.getElementById("prMsg").innerHTML=`<div class="hint warn">Завершить программу? Календарь и журнал дней останутся, можно будет начать новую.</div><button class="btn danger block" data-act="pr_endok">Да, завершить</button>`; return}
+  if(a==="pr_endok"){S.program=null; closeSheet(); commit(); return}
+  if(a==="cal_nav"){const m=calMonth||new Date(); calMonth=new Date(m.getFullYear(),m.getMonth()+(+b.dataset.v),1); render(); return}
+  if(a==="cal_day"){sheetCalDay(b.dataset.d); return}
+});
 
 /* ---------- События ---------- */
 document.addEventListener("click",e=>{
@@ -2646,6 +2802,7 @@ let tipsOn=(()=>{try{return localStorage.getItem("ration_tips")==="1"}catch(e){r
 document.body.classList.toggle("tips",tipsOn);
 document.addEventListener("click",e=>{const b=e.target.closest('[data-act="tips"]'); if(!b) return; tipsOn=b.dataset.v==="1"; try{localStorage.setItem("ration_tips",tipsOn?"1":"0")}catch(x){} document.body.classList.toggle("tips",tipsOn); render()});
 useRoot(loadLocal());
+if(syncCycle()) saveLocal();
 render();
 connect();
 </script>
